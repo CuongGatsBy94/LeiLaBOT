@@ -6,7 +6,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 
-const PREFIX = '.';
+const PREFIX = ',';
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -274,3 +274,4 @@ client.on('messageCreate', async message => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
