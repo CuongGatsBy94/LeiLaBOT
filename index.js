@@ -2,7 +2,7 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-09-29 19:04:16
+ * @Last Modified time: 2025-10-01 18:59:14
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
@@ -163,6 +163,109 @@ client.on('messageCreate', async message => {
     const members = await message.guild.members.fetch();
     const names = members.map(m => m.user.username).join(', ');
     message.reply(`👥 Thành viên trong server:\n${names}`);
+  }
+});
+
+const dailyPath = path.join(__dirname, 'dailyMessages.json');
+function getDailyMessage(key) {
+  return JSON.parse(fs.readFileSync(dailyPath))[key];
+}
+function setDailyMessage(key, content) {
+  const data = JSON.parse(fs.readFileSync(dailyPath));
+  data[key] = content;
+  fs.writeFileSync(dailyPath, JSON.stringify(data, null, 2));
+}
+if (message.content.startsWith('!setmorning')) {
+  const content = message.content.replace('!setmorning', '').trim();
+  setDailyMessage('morning', content);
+  message.reply(`✅ Đã cập nhật nội dung buổi sáng:\n> ${content}`);
+}
+// Tương tự cho !setnoon, !setafternoon, !setevening, !setnight
+cron.schedule('0 8 * * *', () => channel.send(getDailyMessage('morning')));
+cron.schedule('0 12 * * *', () => channel.send(getDailyMessage('noon')));
+cron.schedule('0 16 * * *', () => channel.send(getDailyMessage('afternoon')));
+cron.schedule('0 20 * * *', () => channel.send(getDailyMessage('evening')));
+cron.schedule('0 23 * * *', () => channel.send(getDailyMessage('night')));
+if (message.content === '!help') {
+  message.reply(`
+📘 **Danh sách lệnh bot LeiLaBOT**
+
+✅ Tin nhắn định kỳ:
+• !setmorning <nội dung>
+• !setnoon <nội dung>
+• !setafternoon <nội dung>
+• !setevening <nội dung>
+• !setnight <nội dung>
+
+🗳️ Bình chọn:
+• !poll "Câu hỏi?" "Lựa chọn 1" "Lựa chọn 2"
+
+📅 Nhắc lịch:
+• !remindme <số phút> <nội dung>
+
+🎲 Mini game:
+• !guess <số từ 1-10>
+
+📈 Thống kê:
+• !stats
+
+💬 Tự động phản hồi:
+• Gõ "hello" hoặc "bot ơi" để bot phản hồi
+
+🆘 Trợ giúp:
+• !help – Hiển thị menu này
+  `);
+}
+if (message.content.startsWith('!poll')) {
+  const args = message.content.match(/"([^"]+)"/g);
+  if (!args || args.length < 2) return message.reply('❌ Cần ít nhất 1 câu hỏi và 1 lựa chọn.');
+  const question = args[0].replace(/"/g, '');
+  const options = args.slice(1).map(opt => opt.replace(/"/g, ''));
+  let pollText = `📊 **${question}**\n`;
+  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
+  options.forEach((opt, i) => pollText += `${emojis[i]} ${opt}\n`);
+  message.channel.send(pollText).then(msg => {
+    options.forEach((_, i) => msg.react(emojis[i]));
+  });
+}
+if (message.content.startsWith('!remindme')) {
+  const [_, minutes, ...text] = message.content.split(' ');
+  const delay = parseInt(minutes) * 60000;
+  if (isNaN(delay)) return message.reply('❌ Số phút không hợp lệ.');
+  message.reply(`⏰ Bot sẽ nhắc bạn sau ${minutes} phút.`);
+  setTimeout(() => {
+    message.reply(`🔔 Nhắc bạn: ${text.join(' ')}`);
+  }, delay);
+}
+if (message.content.startsWith('!guess')) {
+  const guess = parseInt(message.content.split(' ')[1]);
+  const number = Math.floor(Math.random() * 10) + 1;
+  if (guess === number) {
+    message.reply(`🎉 Chính xác! Số là ${number}`);
+  } else {
+    message.reply(`😅 Sai rồi! Số đúng là ${number}`);
+  }
+}
+let messageCount = {};
+
+client.on('messageCreate', message => {
+  if (!message.guild || message.author.bot) return;
+  const userId = message.author.id;
+  messageCount[userId] = (messageCount[userId] || 0) + 1;
+
+  if (message.content === '!stats') {
+    const sorted = Object.entries(messageCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, count]) => `<@${id}>: ${count} tin nhắn`);
+    message.reply(`📊 Top hoạt động:\n${sorted.join('\n')}`);
+  }
+});
+client.on('messageCreate', message => {
+  if (message.author.bot) return;
+  const content = message.content.toLowerCase();
+  if (content.includes('hello') || content.includes('bot ơi')) {
+    message.reply('👋 Xin chào! Có gì mình giúp bạn không?');
   }
 });
 
