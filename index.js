@@ -1,3 +1,9 @@
+/**
+ * @Author: Your name
+ * @Date:   2025-09-29 18:55:36
+ * @Last Modified by:   Your name
+ * @Last Modified time: 2025-10-01 19:28:52
+ */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
@@ -6,7 +12,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 
-const PREFIX = ',';
+const PREFIX = '$';
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -199,79 +205,80 @@ client.on('messageCreate', async message => {
 
   // Nhắc lịch
   if (content.startsWith(`${PREFIX}remindme`)) {
-    const minutes = parseInt(args[1]);
-    const reminder = args.slice(2).join(' ');
-    if (isNaN(minutes)) return channel.send('❌ Số phút không hợp lệ.');
-    channel.send(`⏰ Bot sẽ nhắc bạn sau ${minutes} phút.`);
-    setTimeout(() => {
-      channel.send
-          setTimeout(() => {
-      channel.send(`🔔 Nhắc bạn: ${reminder}`);
-    }, minutes * 60000);
-  }
-
-  // Mini game đoán số
-  if (content.startsWith(`${PREFIX}guess`)) {
-    const guess = parseInt(args[1]);
-    const number = Math.floor(Math.random() * 10) + 1;
-    if (guess === number) {
-      channel.send(`🎉 Chính xác! Số là ${number}`);
-    } else {
-      channel.send(`😅 Sai rồi! Số đúng là ${number}`);
+    const minutes = parseInt(args[1], 10);
+    const reminder = args.slice(2).join(' ').trim();
+    if (isNaN(minutes) || minutes <= 0) {
+      return channel.send('❌ Số phút không hợp lệ.');
     }
+    await channel.send(`⏰ Bot sẽ nhắc bạn sau ${minutes} phút.`);
+    setTimeout(() => {
+      channel.send(`🔔 Nhắc bạn: ${reminder || 'Đến giờ rồi!'}`);
+    }, minutes * 60000);
+    return;
   }
-
-  // Thống kê hoạt động
-  if (content === `${PREFIX}stats`) {
-    const sorted = Object.entries(messageCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([id, count]) => `<@${id}>: ${count} tin nhắn`);
-    channel.send(`📊 Top hoạt động:\n${sorted.join('\n')}`);
-  }
-
-  // Hiển thị menu lệnh
-  if (content === `${PREFIX}help`) {
-    channel.send(`
-📘 **Danh sách lệnh bot LeiLaBOT**
-
-✅ Tin nhắn định kỳ:
-• .setmessage <nội dung>
-• .setschedule <cron>
-• .getmessage / .getschedule
-
-⏰ Tin nhắn tự động theo khung giờ:
-• .setmorning / .setnoon / .setafternoon / .setevening / .setnight
-
-🔊 Voice & nhạc:
-• .createvoice
-• .play <YouTube URL>
-
-🧑‍🤝‍🧑 Role & thành viên:
-• .addrole <tên role>
-• .removerole <tên role>
-• .members
-
-🗳️ Bình chọn:
-• .poll "Câu hỏi?" "Lựa chọn 1" "Lựa chọn 2"
-
-📅 Nhắc lịch:
-• .remindme <phút> <nội dung>
-
-🎲 Mini game:
-• .guess <số từ 1-10>
-
-📈 Thống kê:
-• .stats
-
-💬 Phản hồi tự động:
-• Gõ "hello" hoặc "bot ơi"
-
-🆘 Trợ giúp:
-• .help – Hiển thị menu này
-    `);
-  }
-});
-
-client.login(process.env.DISCORD_TOKEN);
-
+  
+    // Mini game đoán số
+    if (content.startsWith(`${PREFIX}guess`)) {
+      const guess = parseInt(args[1]);
+      const number = Math.floor(Math.random() * 10) + 1;
+      if (guess === number) {
+        channel.send(`🎉 Chính xác! Số là ${number}`);
+      } else {
+        channel.send(`😅 Sai rồi! Số đúng là ${number}`);
+      }
+    }
+  
+    // Thống kê hoạt động
+    if (content === `${PREFIX}stats`) {
+      const sorted = Object.entries(messageCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id, count]) => `<@${id}>: ${count} tin nhắn`);
+      channel.send(`📊 Top hoạt động:\n${sorted.join('\n')}`);
+    }
+  
+    // Hiển thị menu lệnh
+    if (content === `${PREFIX}help`) {
+      channel.send(`
+  📘 **Danh sách lệnh bot LeiLaBOT**
+  
+  ✅ Tin nhắn định kỳ:
+  • .setmessage <nội dung>
+  • .setschedule <cron>
+  • .getmessage / .getschedule
+  
+  ⏰ Tin nhắn tự động theo khung giờ:
+  • .setmorning / .setnoon / .setafternoon / .setevening / .setnight
+  
+  🔊 Voice & nhạc:
+  • .createvoice
+  • .play <YouTube URL>
+  
+  🧑‍🤝‍🧑 Role & thành viên:
+  • .addrole <tên role>
+  • .removerole <tên role>
+  • .members
+  
+  🗳️ Bình chọn:
+  • .poll "Câu hỏi?" "Lựa chọn 1" "Lựa chọn 2"
+  
+  📅 Nhắc lịch:
+  • .remindme <phút> <nội dung>
+  
+  🎲 Mini game:
+  • .guess <số từ 1-10>
+  
+  📈 Thống kê:
+  • .stats
+  
+  💬 Phản hồi tự động:
+  • Gõ "hello" hoặc "bot ơi"
+  
+  🆘 Trợ giúp:
+  • .help – Hiển thị menu này
+      `);
+    }
+  });
+  
+  client.login(process.env.DISCORD_TOKEN);
+  
