@@ -2,7 +2,7 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-01 19:28:52
+ * @Last Modified time: 2025-10-01 20:05:40
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
@@ -30,22 +30,22 @@ const dailyPath = path.join(__dirname, 'dailyMessages.json');
 
 // Hàm đọc và ghi file
 function getMessageContent() {
-  return JSON.parse(fs.readFileSync(messagePath)).content;
+  return JSON.parse(fs.readFileSync(messagePath, 'utf8')).content;
 }
 function setMessageContent(newContent) {
   fs.writeFileSync(messagePath, JSON.stringify({ content: newContent }, null, 2));
 }
 function getSchedule() {
-  return JSON.parse(fs.readFileSync(schedulePath)).cron;
+  return JSON.parse(fs.readFileSync(schedulePath, 'utf8')).cron;
 }
 function setSchedule(newCron) {
   fs.writeFileSync(schedulePath, JSON.stringify({ cron: newCron }, null, 2));
 }
 function getDailyMessage(key) {
-  return JSON.parse(fs.readFileSync(dailyPath))[key];
+  return JSON.parse(fs.readFileSync(dailyPath, 'utf8'))[key];
 }
 function setDailyMessage(key, content) {
-  const data = JSON.parse(fs.readFileSync(dailyPath));
+  const data = JSON.parse(fs.readFileSync(dailyPath, 'utf8'));
   data[key] = content;
   fs.writeFileSync(dailyPath, JSON.stringify(data, null, 2));
 }
@@ -107,14 +107,12 @@ client.on('messageCreate', async message => {
   if (content.startsWith(`${PREFIX}setschedule`)) {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) return;
     const newCron = message.content.replace(`${PREFIX}setschedule`, '').trim();
-    try {
-      cron.validate(newCron);
-      setSchedule(newCron);
-      startScheduledMessage();
-      return channel.send(`✅ Đã cập nhật thời gian gửi tin nhắn: \`${newCron}\``);
-    } catch {
+    if (!cron.validate(newCron)) {
       return channel.send('❌ Biểu thức cron không hợp lệ.');
     }
+    setSchedule(newCron);
+    startScheduledMessage();
+    return channel.send(`✅ Đã cập nhật thời gian gửi tin nhắn: \`${newCron}\``);
   }
 
   if (content === `${PREFIX}getmessage`) {
@@ -227,7 +225,88 @@ client.on('messageCreate', async message => {
         channel.send(`😅 Sai rồi! Số đúng là ${number}`);
       }
     }
-  
+    const birthdayPath = path.join(__dirname, 'birthdays.json');
+const eventPath = path.join(__dirname, 'events.json');
+
+function getBirthdays() {
+  return JSON.parse(fs.readFileSync(birthdayPath));
+}
+function getEvents() {
+  return JSON.parse(fs.readFileSync(eventPath));
+}
+
+cron.schedule('0 9 * * *', () => {
+  const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+  const birthdays = getBirthdays();
+  for (const [id, date] of Object.entries(birthdays)) {
+    if (date === today) {
+      channel.send(`🎂 Hôm nay là sinh nhật của <@${id}>! Chúc bạn tuổi mới thật vui vẻ!`);
+    }
+  }
+
+  const events = getEvents();
+  events.forEach(e => {
+    if (e.date === today) {
+      channel.send(`📅 Sự kiện hôm nay: ${e.content}`);
+    }
+  });
+});
+if (content === `${PREFIX}lottery`) {
+  const members = await message.guild.members.fetch();
+  const active = members.filter(m => !m.user.bot);
+  const winner = active.random();
+  channel.send(`🎉 Người trúng xổ số hôm nay là: <@${winner.id}>`);
+}
+const quizQuestions = [
+  { question: "Thủ đô của Việt Nam là gì?", answer: "Hà Nội" },
+  { question: "2 + 2 bằng mấy?", answer: "4" },
+  { question: "Màu của lá cây là gì?", answer: "Xanh" }
+];
+
+if (content === `${PREFIX}quiz`) {
+  const q = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+  channel.send(`🧠 Câu hỏi: ${q.question}`);
+  const filter = m => !m.author.bot;
+  channel.awaitMessages({ filter, max: 1, time: 15000, errors: ['time'] })
+    .then(collected => {
+      const reply = collected.first().content.toLowerCase();
+      if (reply.includes(q.answer.toLowerCase())) {
+        channel.send('🎉 Chính xác!');
+      } else {
+        channel.send(`❌ Sai rồi! Đáp án là: ${q.answer}`);
+      }
+    })
+    .catch(() => channel.send('⏰ Hết giờ rồi!'));
+}
+if (message.content.includes('#quantrong')) {
+  message.pin().then(() => {
+    channel.send('📌 Tin nhắn đã được ghim vì chứa từ khóa quan trọng.');
+  });
+}
+if (content.startsWith(`${PREFIX}clear`)) {
+  const count = parseInt(args[1]);
+  if (!count || count > 100) return channel.send('⚠️ Nhập số từ 1 đến 100.');
+  await channel.bulkDelete(count, true);
+  channel.send(`🧹 Đã xóa ${count} tin nhắn.`).then(msg => setTimeout(() => msg.delete(), 3000));
+}
+const translate = require('@vitalets/google-translate-api');
+
+if (content.startsWith(`${PREFIX}translate`)) {
+  const text = message.content.replace(`${PREFIX}translate`, '').trim();
+  translate(text, { to: 'vi' }).then(res => {
+    channel.send(`🌐 Bản dịch:\n> ${res.text}`);
+  }).catch(() => {
+    channel.send('❌ Không thể dịch.');
+  });
+}
+client.on('guildMemberAdd', member => {
+  const channel = member.guild.channels.cache.get(process.env.CHANNEL_ID);
+  if (channel) {
+    channel.send(`👋 Chào mừng <@${member.id}> đến với server! Chúc bạn có khoảng thời gian tuyệt vời!`);
+  }
+});
+
     // Thống kê hoạt động
     if (content === `${PREFIX}stats`) {
       const sorted = Object.entries(messageCount)
@@ -243,39 +322,39 @@ client.on('messageCreate', async message => {
   📘 **Danh sách lệnh bot LeiLaBOT**
   
   ✅ Tin nhắn định kỳ:
-  • .setmessage <nội dung>
-  • .setschedule <cron>
-  • .getmessage / .getschedule
+  • $setmessage <nội dung>
+  • $setschedule <cron>
+  • $getmessage / $getschedule
   
   ⏰ Tin nhắn tự động theo khung giờ:
-  • .setmorning / .setnoon / .setafternoon / .setevening / .setnight
+  • $setmorning / $setnoon / $setafternoon / $setevening / $setnight
   
   🔊 Voice & nhạc:
-  • .createvoice
-  • .play <YouTube URL>
+  • $createvoice
+  • $play <YouTube URL>
   
   🧑‍🤝‍🧑 Role & thành viên:
-  • .addrole <tên role>
-  • .removerole <tên role>
-  • .members
+  • $addrole <tên role>
+  • $removerole <tên role>
+  • $members
   
   🗳️ Bình chọn:
-  • .poll "Câu hỏi?" "Lựa chọn 1" "Lựa chọn 2"
+  • $poll "Câu hỏi?" "Lựa chọn 1" "Lựa chọn 2"
   
   📅 Nhắc lịch:
-  • .remindme <phút> <nội dung>
+  • $remindme <phút> <nội dung>
   
   🎲 Mini game:
-  • .guess <số từ 1-10>
+  • $guess <số từ 1-10>
   
   📈 Thống kê:
-  • .stats
+  • $stats
   
   💬 Phản hồi tự động:
   • Gõ "hello" hoặc "bot ơi"
   
   🆘 Trợ giúp:
-  • .help – Hiển thị menu này
+  • $help – Hiển thị menu này
       `);
     }
   });
