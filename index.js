@@ -2,20 +2,75 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-03 01:13:06
+ * @Last Modified time: 2025-10-03 18:19:02
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, Collection } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
-const yts = require('yt-search');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const translate = require('@vitalets/google-translate-api');
+const os = require('os');
 
-const PREFIX = '$';
+// Biến toàn cục
+let PREFIX = '$';
+let botStartTime = Date.now();
+let queue = new Map(); // Queue nhạc cho từng server
+
+// Đường dẫn file
+const messagePath = path.join(__dirname, 'message.json');
+const schedulePath = path.join(__dirname, 'schedule.json');
+const dailyPath = path.join(__dirname, 'dailyMessages.json');
+const birthdayPath = path.join(__dirname, 'birthdays.json');
+const eventPath = path.join(__dirname, 'events.json');
+const prefixPath = path.join(__dirname, 'prefix.json');
+
+// Hàm đọc và ghi file
+function initializeFiles() {
+  const files = [
+    { path: messagePath, default: { content: "Tin nhắn mặc định - Hãy sử dụng $setmessage để thay đổi" } },
+    { path: schedulePath, default: { cron: "0 9 * * *" } },
+    { path: dailyPath, default: { 
+      morning: "🌅 Chào buổi sáng cả nhà! Chúc một ngày tốt lành!",
+      noon: "☀️ Chúc mọi người buổi trưa vui vẻ!",
+      afternoon: "🌇 Chiều làm việc hiệu quả nhé!",
+      evening: "🌃 Tối nay có gì vui không mọi người?",
+      night: "🌙 Khuya rồi, nhớ ngủ sớm nha!"
+    }},
+    { path: birthdayPath, default: {} },
+    { path: eventPath, default: [] },
+    { path: prefixPath, default: { prefix: "$" } }
+  ];
+
+  files.forEach(file => {
+    if (!fs.existsSync(file.path)) {
+      fs.writeFileSync(file.path, JSON.stringify(file.default, null, 2));
+    }
+  });
+}
+
+// Hàm đọc prefix từ file
+function getPrefix() {
+  try {
+    const data = JSON.parse(fs.readFileSync(prefixPath, 'utf8'));
+    return data.prefix || '$';
+  } catch (error) {
+    return '$';
+  }
+}
+
+// Hàm ghi prefix vào file
+function setPrefix(newPrefix) {
+  fs.writeFileSync(prefixPath, JSON.stringify({ prefix: newPrefix }, null, 2));
+}
+
+// Khởi tạo files và đọc prefix
+initializeFiles();
+PREFIX = getPrefix();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -32,37 +87,7 @@ client.commands = new Collection();
 client.voiceConnections = new Map();
 client.audioPlayers = new Map();
 
-// Đường dẫn file
-const messagePath = path.join(__dirname, 'message.json');
-const schedulePath = path.join(__dirname, 'schedule.json');
-const dailyPath = path.join(__dirname, 'dailyMessages.json');
-const birthdayPath = path.join(__dirname, 'birthdays.json');
-const eventPath = path.join(__dirname, 'events.json');
-
-// Khởi tạo file nếu chưa tồn tại
-function initializeFiles() {
-  const files = [
-    { path: messagePath, default: { content: "Tin nhắn mặc định - Hãy sử dụng $setmessage để thay đổi" } },
-    { path: schedulePath, default: { cron: "0 9 * * *" } },
-    { path: dailyPath, default: { 
-      morning: "🌅 Chào buổi sáng cả nhà! Chúc một ngày tốt lành!",
-      noon: "☀️ Chúc mọi người buổi trưa vui vẻ!",
-      afternoon: "🌇 Chiều làm việc hiệu quả nhé!",
-      evening: "🌃 Tối nay có gì vui không mọi người?",
-      night: "🌙 Khuya rồi, nhớ ngủ sớm nha!"
-    }},
-    { path: birthdayPath, default: {} },
-    { path: eventPath, default: [] }
-  ];
-
-  files.forEach(file => {
-    if (!fs.existsSync(file.path)) {
-      fs.writeFileSync(file.path, JSON.stringify(file.default, null, 2));
-    }
-  });
-}
-
-// Hàm đọc và ghi file
+// Hàm đọc và ghi các file khác
 function getMessageContent() {
   return JSON.parse(fs.readFileSync(messagePath, 'utf8')).content;
 }
@@ -100,6 +125,259 @@ function addEvent(content, date) {
   fs.writeFileSync(eventPath, JSON.stringify(data, null, 2));
 }
 
+// ==================== HỆ THỐNG TIN NHẮN ĐỊNH KỲ MỚI ====================
+
+function getVietnamTime() {
+  /** Lấy thời gian Việt Nam (UTC+7) */
+  const now = new Date();
+  // Chuyển sang UTC+7
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const vietnamTime = new Date(utc + (3600000 * 7));
+  return vietnamTime;
+}
+
+async function sendMorningMessage() {
+  /** Tin nhắn chào buổi sáng lúc 8:00 */
+  try {
+    const morningMessages = [
+      "🌅 **Chào buổi sáng cả nhà!** Một ngày mới tràn đầy năng lượng và may mắn! ☀️",
+      "🌞 **Buổi sáng tốt lành!** Hy vọng mọi người có một ngày làm việc hiệu quả! 💪",
+      "☀️ **Good morning!** Hãy bắt đầu ngày mới với tinh thần tích cực nào! ✨",
+      "🌄 **Chúc cả nhà buổi sáng an lành!** Đừng quên ăn sáng đầy đủ nhé! 🍳",
+      "🌤️ **Buổi sáng vui vẻ!** Hôm nay sẽ là một ngày tuyệt vời! 🎉"
+    ];
+    
+    const message = morningMessages[Math.floor(Math.random() * morningMessages.length)];
+    
+    const embed = new EmbedBuilder()
+      .setColor(0xFFD700)
+      .setTitle("🌅 CHÀO BUỔI SÁNG - 08:00")
+      .setDescription(message)
+      .addFields(
+        { name: "📅 Hôm nay là", value: `<t:${Math.floor(Date.now() / 1000)}:D>`, inline: true },
+        { name: "⏰ Bây giờ là", value: `<t:${Math.floor(Date.now() / 1000)}:t>`, inline: true }
+      );
+
+    const tips = [
+      "💡 **Mẹo:** Uống một ly nước ấm để khởi động ngày mới!",
+      "💡 **Mẹo:** Lên kế hoạch công việc trong ngày để hiệu quả hơn!",
+      "💡 **Mẹo:** Tập thể dục nhẹ nhàng để cơ thể tỉnh táo!",
+      "💡 **Mẹo:** Nghe nhạc tích cực để có tâm trạng tốt!",
+      "💡 **Mẹo:** Ăn sáng đầy đủ dinh dưỡng!"
+    ];
+    
+    embed.addFields({
+      name: "🌟 Lời khuyên buổi sáng",
+      value: tips[Math.floor(Math.random() * tips.length)],
+      inline: false
+    });
+
+    embed.setFooter({ text: "Chúc bạn một ngày tuyệt vời!" });
+
+    const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
+      console.log("✅ Đã gửi tin nhắn chào buổi sáng lúc 08:00");
+    } else {
+      console.log(`❌ Không tìm thấy kênh với ID: ${process.env.CHANNEL_ID}`);
+    }
+      
+  } catch (error) {
+    console.error(`❌ Lỗi khi gửi tin nhắn buổi sáng: ${error}`);
+  }
+}
+
+async function sendLunchMessage() {
+  /** Nhắc ăn trưa lúc 12:00 */
+  try {
+    const lunchMessages = [
+      "🍱 **Đến giờ ăn trưa rồi cả nhà ơi!** Nhớ ăn uống đủ chất nhé!",
+      "🥗 **Trưa nay ăn gì nhỉ?** Đừng bỏ bữa trưa quan trọng nhé!",
+      "🍜 **Giờ ăn trưa!** Nghỉ ngơi một chút để nạp năng lượng!",
+      "🥘 **Bon appétit!** Chúc mọi người có bữa trưa ngon miệng!",
+      "🍽️ **Ăn trưa thôi nào!** Nhớ ăn chậm nhai kỹ nhé!"
+    ];
+    
+    const message = lunchMessages[Math.floor(Math.random() * lunchMessages.length)];
+    
+    const embed = new EmbedBuilder()
+      .setColor(0xFFA500)
+      .setTitle("🍽️ GIỜ ĂN TRƯA - 12:00")
+      .setDescription(message)
+      .addFields({
+        name: "⏰ Thời gian nghỉ ngơi",
+        value: "Hãy dành ít nhất 30 phút để thư giãn!",
+        inline: false
+      });
+
+    const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
+      console.log("✅ Đã gửi tin nhắn nhắc ăn trưa lúc 12:00");
+    } else {
+      console.log(`❌ Không tìm thấy kênh với ID: ${process.env.CHANNEL_ID}`);
+    }
+      
+  } catch (error) {
+    console.error(`❌ Lỗi khi gửi tin nhắn ăn trưa: ${error}`);
+  }
+}
+
+async function sendEveningMessage() {
+  /** Tin nhắn chiều tà lúc 17:30 */
+  try {
+    const eveningMessages = [
+      "🌇 **Chiều muộn rồi đấy!** Sắp kết thúc một ngày làm việc rồi!",
+      "🌆 **Buổi chiều tốt lành!** Cố gắng hoàn thành nốt công việc cuối ngày nhé!",
+      "🏙️ **Xế chiều rồi!** Đừng quên nghỉ ngơi và thư giãn!",
+      "🌃 **Chiều tà an lành!** Chuẩn bị kết thúc một ngày làm việc hiệu quả!",
+      "🌄 **Hoàng hôn sắp xuống!** Nhìn lại những gì đã đạt được hôm nay nào!"
+    ];
+    
+    const message = eveningMessages[Math.floor(Math.random() * eveningMessages.length)];
+    
+    const embed = new EmbedBuilder()
+      .setColor(0xFF8C00)
+      .setTitle("🌇 CHIỀU TÀ - 17:30")
+      .setDescription(message)
+      .addFields({
+        name: "📊 Hoàn thành ngày làm việc",
+        value: "Hãy tự hào về những gì bạn đã làm hôm nay!",
+        inline: false
+      });
+
+    const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
+      console.log("✅ Đã gửi tin nhắn buổi chiều lúc 17:30");
+    } else {
+      console.log(`❌ Không tìm thấy kênh với ID: ${process.env.CHANNEL_ID}`);
+    }
+      
+  } catch (error) {
+    console.error(`❌ Lỗi khi gửi tin nhắn buổi chiều: ${error}`);
+  }
+}
+
+async function sendNightActivityMessage() {
+  /** Nhắc nhở hoạt động buổi tối lúc 20:00 */
+  try {
+    const activities = [
+      "🎮 **Tối rồi!** Có ai online game không nào?",
+      "📺 **Buổi tối vui vẻ!** Xem phim gì hay tối nay?",
+      "🎵 **Âm nhạc buổi tối!** Cùng nghe nhạc thư giãn nào!",
+      "📚 **Tối nay đọc sách?** Hay học thêm điều gì mới?",
+      "💬 **Trò chuyện tối!** Có ai muốn tâm sự không?"
+    ];
+    
+    const message = activities[Math.floor(Math.random() * activities.length)];
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x8A2BE2)
+      .setTitle("🌃 BUỔI TỐI - 20:00")
+      .setDescription(message)
+      .addFields({
+        name: "⏳ Còn 2 tiếng nữa là đến giờ ngủ",
+        value: "Hãy tận hưởng buổi tối thật trọn vẹn!",
+        inline: false
+      });
+
+    const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
+      console.log("✅ Đã gửi tin nhắn nhắc buổi tối lúc 20:00");
+    } else {
+      console.log(`❌ Không tìm thấy kênh với ID: ${process.env.CHANNEL_ID}`);
+    }
+      
+  } catch (error) {
+    console.error(`❌ Lỗi khi gửi tin nhắn buổi tối: ${error}`);
+  }
+}
+
+async function sendGoodNightMessage() {
+  /** Tin nhắn chúc ngủ ngon lúc 22:00 */
+  try {
+    const nightMessages = [
+      "🌙 **Chúc cả nhà ngủ ngon!** Đừng thức khuya quá nhé! 😴",
+      "✨ **Good night!** Ngủ thật ngon và mơ những giấc mơ đẹp! 💫",
+      "🌌 **Đêm đã khuya!** Hãy tắt máy và nghỉ ngơi thôi nào! 🛌",
+      "🌠 **Chúc ngủ ngon!** Mai lại là một ngày mới tràn đầy hi vọng! 🌅",
+      "💤 **Đến giờ đi ngủ rồi!** Nhớ thư giãn và tắt hết thiết bị điện tử! 📴"
+    ];
+    
+    const message = nightMessages[Math.floor(Math.random() * nightMessages.length)];
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x4B0082)
+      .setTitle("🌙 CHÚC NGỦ NGON - 22:00")
+      .setDescription(message);
+
+    const sleepTips = [
+      "💡 **Mẹo:** Tắt các thiết bị điện tử 30 phút trước khi ngủ",
+      "💡 **Mẹo:** Đọc sách giúp thư giãn và dễ ngủ hơn",
+      "💡 **Mẹo:** Nghe nhạc nhẹ hoặc âm thanh thiên nhiên",
+      "💡 **Mẹo:** Giữ phòng ngủ mát mẻ và thoáng khí",
+      "💡 **Mẹo:** Uống một ly sữa ấm trước khi ngủ"
+    ];
+    
+    embed.addFields(
+      {
+        name: "🌟 Mẹo ngủ ngon",
+        value: sleepTips[Math.floor(Math.random() * sleepTips.length)],
+        inline: false
+      },
+      {
+        name: "📅 Ngày mai",
+        value: "Hẹn gặp lại vào buổi sáng! 🌅",
+        inline: true
+      }
+    );
+
+    embed.setFooter({ text: "Sweet dreams! 💫" });
+
+    const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
+      console.log("✅ Đã gửi tin nhắn chúc ngủ ngon lúc 22:00");
+    } else {
+      console.log(`❌ Không tìm thấy kênh với ID: ${process.env.CHANNEL_ID}`);
+    }
+      
+  } catch (error) {
+    console.error(`❌ Lỗi khi gửi tin nhắn chúc ngủ ngon: ${error}`);
+  }
+}
+
+// Hàm tính uptime
+function getUptime() {
+  const uptime = Date.now() - botStartTime;
+  const days = Math.floor(uptime / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((uptime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((uptime % (1000 * 60)) / 1000);
+  
+  if (days > 0) return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+// Hàm lấy thông tin hệ thống
+function getSystemInfo() {
+  const cpuUsage = (os.loadavg()[0] / os.cpus().length * 100).toFixed(2);
+  const memoryUsage = ((os.totalmem() - os.freemem()) / os.totalmem() * 100).toFixed(2);
+  const memoryUsed = ((os.totalmem() - os.freemem()) / (1024 * 1024 * 1024)).toFixed(2);
+  const memoryTotal = (os.totalmem() / (1024 * 1024 * 1024)).toFixed(2);
+  
+  return {
+    cpu: cpuUsage,
+    memory: memoryUsage,
+    memoryUsed: memoryUsed,
+    memoryTotal: memoryTotal
+  };
+}
+
 // Gửi tin nhắn định kỳ
 let scheduledTask = null;
 function startScheduledMessage() {
@@ -119,61 +397,83 @@ function startScheduledMessage() {
   });
 }
 
-// Khởi tạo files khi bot start
-initializeFiles();
+// Bộ đếm thống kê
+let messageCount = {};
+let userJoinTimes = {};
 
-// Gửi tin nhắn tự động theo khung giờ
+// Hàm helper cho Embed lỗi
+function sendErrorEmbed(channel, message) {
+  const embed = new EmbedBuilder()
+    .setColor(0xFF0000)
+    .setTitle('❌ Lỗi')
+    .setDescription(message)
+    .setTimestamp();
+  return channel.send({ embeds: [embed] });
+}
+
+// Hàm helper cho Embed thành công
+function sendSuccessEmbed(channel, message) {
+  const embed = new EmbedBuilder()
+    .setColor(0x00FF00)
+    .setTitle('✅ Thành công')
+    .setDescription(message)
+    .setTimestamp();
+  return channel.send({ embeds: [embed] });
+}
+
+// Hàm kiểm tra quyền admin
+function isAdmin(member) {
+  return member.permissions.has(PermissionsBitField.Flags.Administrator);
+}
+
 client.once('ready', () => {
   console.log(`✅ Bot đã đăng nhập với tên ${client.user.tag}`);
   console.log(`📊 Đang quản lý ${client.guilds.cache.size} server`);
+  console.log(`🔧 Prefix hiện tại: ${PREFIX}`);
+  
+  botStartTime = Date.now();
   
   const channel = client.channels.cache.get(process.env.CHANNEL_ID);
   if (!channel) return console.log('❌ Không tìm thấy kênh.');
 
-  // Tin nhắn tự động theo giờ với Embed
-  cron.schedule('0 8 * * *', () => {
-    const embed = new EmbedBuilder()
-      .setColor(0xFFD700)
-      .setTitle('🌅 Chào buổi sáng')
-      .setDescription(getDailyMessage('morning'))
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
-  });
+  // ==================== HỆ THỐNG TIN NHẮN ĐỊNH KỲ MỚI ====================
   
-  cron.schedule('0 12 * * *', () => {
-    const embed = new EmbedBuilder()
-      .setColor(0xFFA500)
-      .setTitle('☀️ Buổi trưa')
-      .setDescription(getDailyMessage('noon'))
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
-  });
-  
-  cron.schedule('0 16 * * *', () => {
-    const embed = new EmbedBuilder()
-      .setColor(0x87CEEB)
-      .setTitle('🌇 Buổi chiều')
-      .setDescription(getDailyMessage('afternoon'))
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
-  });
-  
-  cron.schedule('0 20 * * *', () => {
-    const embed = new EmbedBuilder()
-      .setColor(0x4B0082)
-      .setTitle('🌃 Buổi tối')
-      .setDescription(getDailyMessage('evening'))
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
-  });
-  
-  cron.schedule('0 23 * * *', () => {
-    const embed = new EmbedBuilder()
-      .setColor(0x191970)
-      .setTitle('🌙 Buổi đêm')
-      .setDescription(getDailyMessage('night'))
-      .setTimestamp();
-    channel.send({ embeds: [embed] });
+  // Kiểm tra và gửi tin nhắn mỗi phút
+  cron.schedule('* * * * *', async () => {
+    try {
+      const now = getVietnamTime();
+      const currentTime = now.getHours().toString().padStart(2, '0') + ':' + 
+                         now.getMinutes().toString().padStart(2, '0');
+      
+      // Debug: in thời gian hiện tại (chỉ trong console)
+      if (now.getSeconds() === 0) {
+        console.log(`⏰ Kiểm tra thời gian: ${currentTime} (UTC+7)`);
+      }
+      
+      // Kiểm tra và gửi tin nhắn theo giờ
+      const channel = client.channels.cache.get(process.env.CHANNEL_ID);
+      if (!channel) {
+        if (now.getMinutes() === 0) {
+          console.log(`❌ Không tìm thấy kênh schedule với ID: ${process.env.CHANNEL_ID}`);
+        }
+        return;
+      }
+      
+      if (currentTime === "08:00") {
+        await sendMorningMessage();
+      } else if (currentTime === "12:00") {
+        await sendLunchMessage();
+      } else if (currentTime === "17:30") {
+        await sendEveningMessage();
+      } else if (currentTime === "20:00") {
+        await sendNightActivityMessage();
+      } else if (currentTime === "22:00") {
+        await sendGoodNightMessage();
+      }
+      
+    } catch (error) {
+      console.error(`Lỗi trong scheduled_messages: ${error}`);
+    }
   });
 
   // Kiểm tra sinh nhật và sự kiện
@@ -217,10 +517,6 @@ client.once('ready', () => {
 
 client.on('ready', startScheduledMessage);
 
-// Bộ đếm thống kê
-let messageCount = {};
-let userJoinTimes = {};
-
 client.on('messageCreate', async message => {
   if (!message.guild || message.author.bot) return;
   
@@ -248,22 +544,139 @@ client.on('messageCreate', async message => {
     return channel.send({ embeds: [embed] });
   }
 
-  // Lệnh help với Embed đẹp
+  // === CÁC LỆNH MỚI ===
+
+  // Lệnh kiểm tra trạng thái bot
+  if (command === 'botstatus') {
+    try {
+      const ping = Date.now() - message.createdTimestamp;
+      const systemInfo = getSystemInfo();
+      const serverQueue = queue.get(message.guild.id) || [];
+      
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('🤖 Trạng thái Bot')
+        .setDescription('Thông tin về bot hiện tại')
+        .addFields(
+          { name: '📊 Ping', value: `${ping}ms`, inline: true },
+          { name: '🕒 Uptime', value: getUptime(), inline: true },
+          { name: '🎵 Queue', value: `${serverQueue.length} bài hát`, inline: true },
+          { name: '🔧 Prefix', value: `\`${PREFIX}\``, inline: true }
+        );
+
+      // Thông tin voice
+      const voiceConnection = client.voiceConnections.get(message.guild.id);
+      if (voiceConnection) {
+        const voiceChannel = message.guild.channels.cache.get(voiceConnection.joinConfig.channelId);
+        embed.addFields({ name: '🔊 Voice', value: `✅ ${voiceChannel.name}`, inline: true });
+        
+        const audioPlayer = client.audioPlayers.get(message.guild.id);
+        if (audioPlayer && audioPlayer.state.status === 'playing') {
+          embed.addFields({ name: '🎵 Đang phát', value: '✅ Có', inline: true });
+        } else {
+          embed.addFields({ name: '🎵 Đang phát', value: '❌ Không', inline: true });
+        }
+      } else {
+        embed.addFields({ name: '🔊 Voice', value: '❌ Không kết nối', inline: true });
+      }
+
+      // Thông tin hệ thống
+      embed.addFields(
+        { name: '💻 CPU', value: `${systemInfo.cpu}%`, inline: true },
+        { name: '🧠 RAM', value: `${systemInfo.memory}% (${systemInfo.memoryUsed}GB/${systemInfo.memoryTotal}GB)`, inline: true }
+      );
+
+      await channel.send({ embeds: [embed] });
+      
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi kiểm tra trạng thái: ${error.message}`);
+    }
+  }
+
+  // Lệnh thay đổi prefix
+  if (command === 'setprefix') {
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const newPrefix = args[0];
+    if (!newPrefix) {
+      return sendErrorEmbed(channel, 'Vui lòng nhập prefix mới!');
+    }
+
+    try {
+      // Kiểm tra prefix hợp lệ
+      if (newPrefix.length > 5) {
+        return sendErrorEmbed(channel, 'Prefix không được dài quá 5 ký tự!');
+      }
+
+      if (['@', '@everyone', '@here', '```'].includes(newPrefix.toLowerCase())) {
+        return sendErrorEmbed(channel, 'Prefix không được chứa ký tự đặc biệt!');
+      }
+
+      // Lưu prefix cũ
+      const oldPrefix = PREFIX;
+      
+      // Cập nhật prefix mới
+      PREFIX = newPrefix;
+      setPrefix(newPrefix);
+
+      // Tạo embed thông báo
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🔧 Đã thay đổi Prefix')
+        .setDescription('Prefix đã được thay đổi thành công!')
+        .addFields(
+          { name: '📝 Prefix cũ', value: `\`${oldPrefix}\``, inline: true },
+          { name: '📝 Prefix mới', value: `\`${newPrefix}\``, inline: true },
+          { name: '👤 Thay đổi bởi', value: message.author.toString(), inline: true }
+        )
+        .setTimestamp();
+
+      await channel.send({ embeds: [embed] });
+      
+      // Log thay đổi
+      console.log(`Prefix đã thay đổi từ '${oldPrefix}' thành '${newPrefix}' bởi ${message.author.tag}`);
+      
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi thay đổi prefix: ${error.message}`);
+    }
+  }
+
+  // Lệnh hiển thị prefix hiện tại
+  if (command === 'prefix') {
+    const embed = new EmbedBuilder()
+      .setColor(0x0099FF)
+      .setTitle('🔧 Prefix Bot')
+      .setDescription(`Prefix hiện tại của bot là: **\`${PREFIX}\`**`)
+      .addFields(
+        { name: '💡 Cách sử dụng', value: `Gõ \`${PREFIX}help\` để xem danh sách lệnh`, inline: false },
+        { name: '🔧 Thay đổi prefix', value: `Admin có thể dùng \`${PREFIX}setprefix <prefix_mới>\``, inline: false }
+      )
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+  }
+
+  // Lệnh help với Embed đẹp (cập nhật với prefix động)
   if (command === 'help') {
     const embed = new EmbedBuilder()
       .setColor(0x0099FF)
       .setTitle('📘 Danh sách lệnh - LeiLaBOT')
       .setDescription(`Prefix: \`${PREFIX}\``)
       .addFields(
-        { name: '✅ Tin nhắn định kỳ', value: '`setmessage <nội dung>`\n`setschedule <cron>`\n`getmessage`\n`getschedule`', inline: true },
-        { name: '⏰ Tin nhắn tự động', value: '`setmorning/noon/afternoon/evening/night <nội dung>`', inline: true },
-        { name: '🔊 Voice & nhạc', value: '`createvoice`\n`play <URL/tên>`\n`stop`\n`pause`\n`resume`', inline: true },
-        { name: '🧑‍🤝‍🧑 Thành viên & Role', value: '`members`\n`addrole <tên>`\n`removerole <tên>`\n`userinfo [@user]`', inline: true },
-        { name: '🗳️ Tiện ích', value: '`poll "câu hỏi" "lựa chọn"`\n`remindme <phút> <nội dung>`\n`translate <văn bản>`', inline: true },
-        { name: '🎲 Mini game', value: '`guess <số 1-10>`\n`quiz`\n`lottery`', inline: true },
-        { name: '📈 Thống kê', value: '`stats`\n`serverinfo`', inline: true },
-        { name: '🎉 Sinh nhật & Sự kiện', value: '`setbirthday <dd/mm>`\n`addevent <dd/mm> <nội dung>`', inline: true },
-        { name: '🛠️ Quản lý', value: '`clear <số>`\n`slowmode <giây>`', inline: true }
+        { name: '🤖 Bot & Hệ thống', value: `\`botstatus\` - Trạng thái bot\n\`prefix\` - Xem prefix\n\`setprefix <prefix>\` - Đổi prefix (admin)`, inline: true },
+        { name: '✅ Tin nhắn định kỳ', value: `\`setmessage <nội dung>\`\n\`setschedule <cron>\`\n\`getmessage\`\n\`getschedule\``, inline: true },
+        { name: '⏰ Tin nhắn tự động', value: `\`setmorning/noon/afternoon/evening/night <nội dung>\``, inline: true },
+        { name: '🔊 Voice & nhạc', value: `\`createvoice\`\n\`play <URL>\`\n\`stop\`\n\`pause\`\n\`resume\``, inline: true },
+        { name: '🧑‍🤝‍🧑 Thành viên & Role', value: `\`members\`\n\`addrole <tên>\`\n\`removerole <tên>\`\n\`userinfo [@user]\``, inline: true },
+        { name: '🗳️ Tiện ích', value: `\`poll "câu hỏi" "lựa chọn"\`\n\`remindme <phút> <nội dung>\`\n\`translate <văn bản>\``, inline: true },
+        { name: '🎲 Mini game', value: `\`guess <số 1-10>\`\n\`quiz\`\n\`lottery\``, inline: true },
+        { name: '📈 Thống kê', value: `\`stats\`\n\`serverinfo\``, inline: true },
+        { name: '🎉 Sinh nhật & Sự kiện', value: `\`setbirthday <dd/mm>\`\n\`addevent <dd/mm> <nội dung>\``, inline: true },
+        { name: '🛠️ Quản lý', value: `\`clear <số>\`\n\`slowmode <giây>\``, inline: true }
       )
       .setFooter({ text: `LeiLaBOT • ${new Date().getFullYear()}`, iconURL: client.user.displayAvatarURL() })
       .setTimestamp();
@@ -271,9 +684,9 @@ client.on('messageCreate', async message => {
     return channel.send({ embeds: [embed] });
   }
 
-  // Lệnh quản lý tin nhắn định kỳ với Embed
+  // CÁC LỆNH CŨ (giữ nguyên từ code trước)
   if (command === 'setmessage') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (!isAdmin(message.member)) {
       return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
     }
     const newContent = args.join(' ');
@@ -289,7 +702,7 @@ client.on('messageCreate', async message => {
   }
 
   if (command === 'setschedule') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (!isAdmin(message.member)) {
       return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
     }
     const newCron = args[0];
@@ -342,7 +755,7 @@ client.on('messageCreate', async message => {
 
   // Tạo voice channel với Embed
   if (command === 'createvoice') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (!isAdmin(message.member)) {
       return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
     }
     try {
@@ -367,24 +780,18 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // Hệ thống phát nhạc nâng cấp
+  // Hệ thống phát nhạc (chỉ dùng URL)
   if (command === 'play') {
-    const query = args.join(' ');
-    if (!query) return sendErrorEmbed(channel, 'Vui lòng cung cấp URL hoặc tên bài hát!');
+    const url = args[0];
+    if (!url) return sendErrorEmbed(channel, 'Vui lòng cung cấp URL YouTube!');
     
     const voiceChannel = message.member.voice.channel;
     if (!voiceChannel) return sendErrorEmbed(channel, 'Bạn cần tham gia voice channel trước!');
 
     try {
-      let url = query;
-      
-      // Nếu không phải URL, tìm kiếm trên YouTube
-      if (!ytdl.validateURL(query)) {
-        const searchResult = await yts(query);
-        if (!searchResult.videos.length) {
-          return sendErrorEmbed(channel, 'Không tìm thấy bài hát!');
-        }
-        url = searchResult.videos[0].url;
+      // Kiểm tra URL hợp lệ
+      if (!ytdl.validateURL(url)) {
+        return sendErrorEmbed(channel, 'URL YouTube không hợp lệ!');
       }
 
       const connection = joinVoiceChannel({
@@ -410,7 +817,7 @@ client.on('messageCreate', async message => {
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
         .setTitle('🎶 Đang phát nhạc')
-        .setDescription(`Đang phát: ${url}`)
+        .setDescription(`Đang phát từ URL: ${url}`)
         .setTimestamp();
       channel.send({ embeds: [embed] });
 
@@ -492,7 +899,7 @@ client.on('messageCreate', async message => {
     }
   }
 
-  // Xem danh sách thành viên (đã được nâng cấp)
+  // Xem danh sách thành viên
   if (command === 'members') {
     try {
       const members = await message.guild.members.fetch();
@@ -957,26 +1364,6 @@ client.on('messageCreate', async message => {
     channel.send({ embeds: [embed] });
   }
 });
-
-// Hàm helper cho Embed lỗi
-function sendErrorEmbed(channel, message) {
-  const embed = new EmbedBuilder()
-    .setColor(0xFF0000)
-    .setTitle('❌ Lỗi')
-    .setDescription(message)
-    .setTimestamp();
-  return channel.send({ embeds: [embed] });
-}
-
-// Hàm helper cho Embed thành công
-function sendSuccessEmbed(channel, message) {
-  const embed = new EmbedBuilder()
-    .setColor(0x00FF00)
-    .setTitle('✅ Thành công')
-    .setDescription(message)
-    .setTimestamp();
-  return channel.send({ embeds: [embed] });
-}
 
 // Sự kiện thành viên tham gia
 client.on('guildMemberAdd', async member => {
