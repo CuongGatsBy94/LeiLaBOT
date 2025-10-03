@@ -1,0 +1,7 @@
+{
+  "welcomeChannel": "",
+  "goodbyeChannel": "",
+  "welcomeMessage": "👋 Chào mừng {user} đã tham gia **{server}**!",
+  "goodbyeMessage": "😢 {user} đã rời khỏi **{server}**...",
+  "welcomeRole": ""
+}
