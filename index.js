@@ -2,7 +2,7 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-04 17:51:38
+ * @Last Modified time: 2025-10-05 04:14:51
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, Collection } = require('discord.js');
@@ -151,7 +151,7 @@ async function sendWelcomeMessage(member) {
         { name: '👥 Thành viên thứ', value: `#${member.guild.memberCount}`, inline: true },
         { name: '📅 Tạo tài khoản', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
-      .setImage('https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif')
+      .setImage('https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphyhttps://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbHpsdG5pNDU4dm90NHZmMDJkM2M1Z3lrdWozN3k3OTMzOHg1bnRiNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/R4C2rSbLdKXYcw1ts3/giphy.gif.gif')
       .setFooter({ text: `Chúc bạn có những trải nghiệm tuyệt vời tại ${member.guild.name}!` })
       .setTimestamp();
 
@@ -207,7 +207,7 @@ async function sendGoodbyeMessage(member) {
         { name: '👥 Thành viên còn lại', value: `${member.guild.memberCount - 1}`, inline: true },
         { name: '📅 Tham gia server', value: member.joinedAt ? `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>` : 'Không rõ', inline: true }
       )
-      .setImage('https://media.giphy.com/media/Lp7yMagmDN9VS/giphy.gif')
+      .setImage('https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGgyNHRsMXNtemp2cGZybWM5YmRuN3hmbnRiMzFla3FlbHdmYjNkaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/i2Rcn45tJjqcnh3Qcl/giphy.gif')
       .setFooter({ text: `Hy vọng sẽ gặp lại ${member.user.username} trong tương lai!` })
       .setTimestamp();
 
