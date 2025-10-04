@@ -2,7 +2,7 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-03 20:12:55
+ * @Last Modified time: 2025-10-04 17:51:38
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, Collection } = require('discord.js');
@@ -1161,5 +1161,40 @@ if (command === 'info') {
     }, minutes * 60000);
   }
 });
+// Thêm vào phần lệnh
+if (command === 'verifyinfo') {
+  trackCommandUsage('verifyinfo');
+  const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('🔐 Thông tin Xác minh Bot')
+      .setDescription('Thông tin về quá trình xác minh LeiLaBOT với Discord')
+      .addFields(
+          { name: '📊 Số server hiện tại', value: `${client.guilds.cache.size}/75 servers`, inline: true },
+          { name: '⏰ Thời gian hoạt động', value: getUptime(), inline: true },
+          { name: '✅ Trạng thái', value: 'Đang trong quá trình xác minh', inline: true },
+          { name: '📋 Yêu cầu', value: '• 75+ servers\n• 2+ tháng hoạt động\n• Privacy Policy\n• Terms of Service\n• Tuân thủ ToS', inline: false },
+          { name: '🔗 Links quan trọng', value: '[Developer Portal](https://discord.com/developers/applications) | [Documentation](https://discord.com/developers/docs/topics/oauth2)', inline: false }
+      )
+      .setFooter({ text: 'LeiLaBOT Verification Process' })
+      .setTimestamp();
+  
+  await channel.send({ embeds: [embed] });
+}
 
+if (command === 'support') {
+  trackCommandUsage('support');
+  const embed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('🤝 Hỗ trợ Xác minh')
+      .setDescription('Giúp LeiLaBOT được xác minh bằng cách:')
+      .addFields(
+          { name: '1. Mời bot', value: 'Mời bot đến server của bạn', inline: false },
+          { name: '2. Đánh giá', value: 'Đánh giá bot trên các bot list', inline: false },
+          { name: '3. Báo cáo lỗi', value: 'Giúp cải thiện chất lượng bot', inline: false }
+      )
+      .setFooter({ text: 'Cảm ơn sự hỗ trợ của bạn!' })
+      .setTimestamp();
+  
+  await channel.send({ embeds: [embed] });
+}
 client.login(process.env.DISCORD_TOKEN);
