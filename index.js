@@ -2,12 +2,13 @@
  * @Author: Your name
  * @Date:   2025-09-29 18:55:36
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-05 04:14:51
+ * @Last Modified time: 2025-10-05 21:40:58
  */
 require('dotenv').config();
 const { Client, GatewayIntentBits, PermissionsBitField, Collection } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
+const playdl = require('play-dl');
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +22,124 @@ let botStartTime = Date.now();
 let queue = new Map();
 let commandUsage = {};
 
+// Hệ thống queue cho playlist
+const musicQueues = new Map();
+
+function getQueue(guildId) {
+  if (!musicQueues.has(guildId)) {
+    musicQueues.set(guildId, {
+      songs: [],
+      currentIndex: 0,
+      isPlaying: false,
+      isPaused: false
+    });
+  }
+  return musicQueues.get(guildId);
+}
+
+function addToQueue(guildId, song) {
+  const queue = getQueue(guildId);
+  queue.songs.push(song);
+  return queue.songs.length;
+}
+
+function removeFromQueue(guildId, index) {
+  const queue = getQueue(guildId);
+  if (index >= 0 && index < queue.songs.length) {
+    queue.songs.splice(index, 1);
+    if (index < queue.currentIndex) {
+      queue.currentIndex--;
+    }
+  }
+  return queue.songs.length;
+}
+
+function clearQueue(guildId) {
+  const queue = getQueue(guildId);
+  queue.songs = [];
+  queue.currentIndex = 0;
+  queue.isPlaying = false;
+  queue.isPaused = false;
+}
+
+async function playNextSong(guildId, client) {
+  const queue = getQueue(guildId);
+  const connection = client.voiceConnections.get(guildId);
+  const player = client.audioPlayers.get(guildId);
+  
+  if (!connection || !player) {
+    clearQueue(guildId);
+    return;
+  }
+
+  if (queue.currentIndex >= queue.songs.length) {
+    // Hết bài hát trong queue
+    const channel = client.channels.cache.get(connection.joinConfig.channelId);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setColor(0x808080)
+        .setTitle('🎵 Đã phát hết playlist')
+        .setDescription('Tất cả bài hát trong playlist đã được phát xong.')
+        .setTimestamp();
+      channel.send({ embeds: [embed] }).catch(console.error);
+    }
+    
+    connection.destroy();
+    client.voiceConnections.delete(guildId);
+    client.audioPlayers.delete(guildId);
+    clearQueue(guildId);
+    return;
+  }
+
+  const song = queue.songs[queue.currentIndex];
+  queue.isPlaying = true;
+  queue.isPaused = false;
+
+  try {
+    const stream = await ytdl(song.url, {
+      filter: 'audioonly',
+      quality: 'highestaudio',
+      highWaterMark: 1 << 25
+    });
+
+    const resource = createAudioResource(stream, {
+      inlineVolume: true
+    });
+
+    player.play(resource);
+
+    // Hiển thị thông tin bài hát
+    const channel = client.channels.cache.get(connection.joinConfig.channelId);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🎶 Đang phát')
+        .setDescription(`**${song.title}**`)
+        .addFields(
+          { name: '📺 Channel', value: song.channel, inline: true },
+          { name: '⏱️ Thời lượng', value: song.duration, inline: true },
+          { name: '📊 Vị trí', value: `${queue.currentIndex + 1}/${queue.songs.length}`, inline: true },
+          { name: '👤 Yêu cầu bởi', value: song.requester, inline: false }
+        )
+        .setThumbnail(song.thumbnail)
+        .setTimestamp();
+      
+      await channel.send({ embeds: [embed] });
+    }
+
+    // Lắng nghe khi bài hát kết thúc
+    player.once(AudioPlayerStatus.Idle, () => {
+      queue.currentIndex++;
+      setTimeout(() => playNextSong(guildId, client), 1000);
+    });
+
+  } catch (error) {
+    console.error('Error playing next song:', error);
+    queue.currentIndex++;
+    setTimeout(() => playNextSong(guildId, client), 2000);
+  }
+}
+
 // Đường dẫn file
 const messagePath = path.join(__dirname, 'message.json');
 const schedulePath = path.join(__dirname, 'schedule.json');
@@ -29,6 +148,8 @@ const birthdayPath = path.join(__dirname, 'birthdays.json');
 const eventPath = path.join(__dirname, 'events.json');
 const prefixPath = path.join(__dirname, 'prefix.json');
 const welcomePath = path.join(__dirname, 'welcomeConfig.json');
+const dmMessagesPath = path.join(__dirname, 'dmMessages.json');
+const botConfigPath = path.join(__dirname, 'botConfig.json');
 
 // Hàm đọc và ghi file
 function initializeFiles() {
@@ -51,6 +172,11 @@ function initializeFiles() {
       welcomeMessage: "👋 Chào mừng {user} đã tham gia **{server}**!",
       goodbyeMessage: "😢 {user} đã rời khỏi **{server}**...",
       welcomeRole: ""
+    }},
+    { path: dmMessagesPath, default: [] },
+    { path: botConfigPath, default: { 
+      dmLogChannel: "",
+      autoReply: false
     }}
   ];
 
@@ -79,6 +205,63 @@ function getWelcomeConfig() {
 // Hàm ghi cấu hình welcome
 function setWelcomeConfig(config) {
   fs.writeFileSync(welcomePath, JSON.stringify(config, null, 2));
+}
+
+// Hàm đọc tin nhắn DM
+function getDmMessages() {
+  try {
+    return JSON.parse(fs.readFileSync(dmMessagesPath, 'utf8'));
+  } catch (error) {
+    return [];
+  }
+}
+
+// Hàm ghi tin nhắn DM
+function addDmMessage(message) {
+  try {
+    const messages = getDmMessages();
+    messages.push({
+      id: message.id,
+      author: {
+        id: message.author.id,
+        tag: message.author.tag,
+        username: message.author.username
+      },
+      content: message.content,
+      timestamp: message.createdTimestamp,
+      attachments: message.attachments.map(att => ({
+        name: att.name,
+        url: att.url,
+        size: att.size
+      }))
+    });
+    
+    // Giới hạn 100 tin nhắn gần nhất
+    if (messages.length > 100) {
+      messages.splice(0, messages.length - 100);
+    }
+    
+    fs.writeFileSync(dmMessagesPath, JSON.stringify(messages, null, 2));
+  } catch (error) {
+    console.error('Error saving DM message:', error);
+  }
+}
+
+// Hàm đọc cấu hình bot
+function getBotConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(botConfigPath, 'utf8'));
+  } catch (error) {
+    return {
+      dmLogChannel: "",
+      autoReply: false
+    };
+  }
+}
+
+// Hàm ghi cấu hình bot
+function setBotConfig(config) {
+  fs.writeFileSync(botConfigPath, JSON.stringify(config, null, 2));
 }
 
 // Hàm đọc prefix từ file
@@ -151,7 +334,7 @@ async function sendWelcomeMessage(member) {
         { name: '👥 Thành viên thứ', value: `#${member.guild.memberCount}`, inline: true },
         { name: '📅 Tạo tài khoản', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
       )
-      .setImage('https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphyhttps://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExbHpsdG5pNDU4dm90NHZmMDJkM2M1Z3lrdWozN3k3OTMzOHg1bnRiNiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/R4C2rSbLdKXYcw1ts3/giphy.gif.gif')
+      .setImage('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHc2cDh6MHhzMGpwMXlydnkzYmJzYzAyb2QwdGQxMG5weHFyYzRoMiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Cmr1OMJ2FN0B2/giphy.gif')
       .setFooter({ text: `Chúc bạn có những trải nghiệm tuyệt vời tại ${member.guild.name}!` })
       .setTimestamp();
 
@@ -160,7 +343,7 @@ async function sendWelcomeMessage(member) {
         new ButtonBuilder()
           .setLabel('📖 Đọc quy tắc')
           .setStyle(ButtonStyle.Link)
-          .setURL('https://your-rules-link.com'),
+          .setURL('hhttps://docs.google.com/document/d/1sW6saLqoXnnvPbL4dDv7-rBAO19tmEMlcHU61WFUwAQ/edit?usp=sharing'),
         new ButtonBuilder()
           .setLabel('🎮 Giới thiệu bản thân')
           .setStyle(ButtonStyle.Primary)
@@ -207,7 +390,7 @@ async function sendGoodbyeMessage(member) {
         { name: '👥 Thành viên còn lại', value: `${member.guild.memberCount - 1}`, inline: true },
         { name: '📅 Tham gia server', value: member.joinedAt ? `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>` : 'Không rõ', inline: true }
       )
-      .setImage('https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGgyNHRsMXNtemp2cGZybWM5YmRuN3hmbnRiMzFla3FlbHdmYjNkaiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/i2Rcn45tJjqcnh3Qcl/giphy.gif')
+      .setImage('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcjlubGtkdTN0bmJiMDFyZ3l4dm9zY2o4bXE5cXZmMmZlZ2lwM2VhNCZlcD12MV9naWZzX3NlYXJjaCZjdD1n/fxe8v45NNXFd4jdaNI/giphy.gif')
       .setFooter({ text: `Hy vọng sẽ gặp lại ${member.user.username} trong tương lai!` })
       .setTimestamp();
 
@@ -472,6 +655,7 @@ client.on('guildMemberRemove', async (member) => {
   await sendGoodbyeMessage(member);
 });
 
+
 // ==================== XỬ LÝ BUTTON INTERACTIONS ====================
 
 client.on('interactionCreate', async interaction => {
@@ -511,6 +695,60 @@ let messageCount = {};
 let userJoinTimes = {};
 
 client.on('messageCreate', async message => {
+  // Xử lý tin nhắn DM trước
+  if (!message.guild && !message.author.bot) {
+    try {
+      // Lưu tin nhắn DM
+      addDmMessage(message);
+      
+      // Gửi log đến kênh được cấu hình
+      const config = getBotConfig();
+      if (config.dmLogChannel) {
+        const logChannel = client.channels.cache.get(config.dmLogChannel);
+        if (logChannel) {
+          const embed = new EmbedBuilder()
+            .setColor(0x7289DA)
+            .setTitle('📨 Tin nhắn DM mới')
+            .setDescription(`**Từ:** ${message.author.tag} (${message.author.id})\n**Nội dung:** ${message.content || '*Không có nội dung*'}`)
+            .addFields(
+              { name: '🕒 Thời gian', value: `<t:${Math.floor(message.createdTimestamp / 1000)}:F>`, inline: true },
+              { name: '📎 Đính kèm', value: message.attachments.size > 0 ? `${message.attachments.size} file(s)` : 'Không có', inline: true }
+            )
+            .setThumbnail(message.author.displayAvatarURL())
+            .setTimestamp();
+          
+          if (message.attachments.size > 0) {
+            const attachments = message.attachments.map(att => `[${att.name}](${att.url})`).join('\n');
+            embed.addFields({ name: '📎 Files đính kèm', value: attachments, inline: false });
+          }
+          
+          await logChannel.send({ embeds: [embed] });
+        }
+      }
+      
+      // Phản hồi tự động nếu được bật
+      if (config.autoReply) {
+        const autoReplyEmbed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('🤖 LeiLaBOT - Tự động phản hồi')
+          .setDescription('Cảm ơn bạn đã liên hệ! Tôi đã nhận được tin nhắn của bạn và sẽ phản hồi sớm nhất có thể.')
+          .addFields(
+            { name: '⏰ Thời gian phản hồi', value: 'Thường trong vòng 24 giờ', inline: true },
+            { name: '📧 Liên hệ khác', value: 'Bạn có thể liên hệ qua server chính của chúng tôi', inline: true }
+          )
+          .setFooter({ text: 'LeiLaBOT Support Team' })
+          .setTimestamp();
+        
+        await message.reply({ embeds: [autoReplyEmbed] });
+      }
+      
+    } catch (error) {
+      console.error('Error handling DM message:', error);
+    }
+    return;
+  }
+  
+  // Bỏ qua nếu không phải tin nhắn trong server hoặc là bot
   if (!message.guild || message.author.bot) return;
   
   const content = message.content.toLowerCase();
@@ -718,7 +956,7 @@ if (command === 'info') {
         },
         { 
           name: '🔊 ÂM NHẠC', 
-          value: '`play` - Phát nhạc YouTube\n`stop` - Dừng nhạc\n`pause` - Tạm dừng\n`resume` - Tiếp tục' 
+          value: '`play` - Phát nhạc/playlist YouTube\n`stop` - Dừng nhạc\n`pause` - Tạm dừng\n`resume` - Tiếp tục\n`skip` - Bỏ qua bài\n`queue` - Xem queue\n`clearqueue` - Xóa queue\n`nowplaying` - Thông tin bài hát' 
         },
         { 
           name: '👥 THÀNH VIÊN', 
@@ -735,6 +973,10 @@ if (command === 'info') {
         { 
           name: '🔐 XÁC MINH', 
           value: '`verifyinfo` - Thông tin xác minh\n`support` - Hỗ trợ xác minh' 
+        },
+        { 
+          name: '📨 DM (ADMIN ONLY)', 
+          value: '`dms` - Xem tin nhắn DM gần đây\n`reply` - Phản hồi DM\n`setdmlog` - Đặt kênh log DM\n`autoreply` - Bật/tắt auto reply\n`dmstats` - Thống kê DM' 
         }
       )
       .setFooter({ text: `LeiLaBOT • ${new Date().getFullYear()}`, iconURL: client.user.displayAvatarURL() })
@@ -821,15 +1063,20 @@ if (command === 'info') {
   if (command === 'play') {
     trackCommandUsage('play');
     const url = args[0];
-    if (!url) return sendErrorEmbed(channel, 'Vui lòng cung cấp URL YouTube!');
+    if (!url) return sendErrorEmbed(channel, 'Vui lòng cung cấp URL YouTube hoặc playlist!');
     
     const voiceChannel = message.member.voice.channel;
     if (!voiceChannel) return sendErrorEmbed(channel, 'Bạn cần tham gia voice channel trước!');
 
     try {
-      if (!ytdl.validateURL(url)) {
-        return sendErrorEmbed(channel, 'URL YouTube không hợp lệ!');
-      }
+      // Hiển thị embed đang tải
+      const loadingEmbed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('🔄 Đang tải...')
+        .setDescription('Vui lòng chờ trong giây lát...')
+        .setTimestamp();
+      
+      const loadingMsg = await channel.send({ embeds: [loadingEmbed] });
 
       // Kiểm tra nếu bot đã kết nối voice channel khác
       const existingConnection = client.voiceConnections.get(message.guild.id);
@@ -848,77 +1095,546 @@ if (command === 'info') {
       // Thêm xử lý lỗi cho player
       player.on('error', error => {
         console.error('Audio player error:', error);
-        sendErrorEmbed(channel, 'Lỗi khi phát nhạc!');
+        sendErrorEmbed(channel, 'Lỗi khi phát nhạc! Có thể video bị hạn chế hoặc không khả dụng.');
+        connection.destroy();
+        client.voiceConnections.delete(message.guild.id);
+        client.audioPlayers.delete(message.guild.id);
+        clearQueue(message.guild.id);
       });
 
-      const resource = createAudioResource(ytdl(url, { 
-        filter: 'audioonly',
-        quality: 'highestaudio'
-      }), {
-        inlineVolume: true
+      // Thêm xử lý lỗi cho connection
+      connection.on('error', error => {
+        console.error('Voice connection error:', error);
+        sendErrorEmbed(channel, 'Lỗi kết nối voice channel!');
       });
-
-      connection.subscribe(player);
-      player.play(resource);
 
       client.voiceConnections.set(message.guild.id, connection);
       client.audioPlayers.set(message.guild.id, player);
 
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('🎶 Đang phát nhạc')
-        .setDescription(`Đang phát từ URL: ${url}`)
-        .addFields(
-          { name: '🎵 Kênh', value: voiceChannel.name, inline: true },
-          { name: '⏱️ Trạng thái', value: 'Đang phát', inline: true }
-        )
-        .setTimestamp();
-      channel.send({ embeds: [embed] });
+      // Kiểm tra xem có phải playlist không
+      const isPlaylist = url.includes('playlist') || url.includes('list=');
+      
+      if (isPlaylist) {
+        // Xử lý playlist
+        try {
+          const playlistInfo = await playdl.playlist_info(url, { incomplete: true });
+          const videos = await playlistInfo.all_videos();
+          
+          // Giới hạn 20 bài hát
+          const limitedVideos = videos.slice(0, 20);
+          
+          if (limitedVideos.length === 0) {
+            await loadingMsg.delete().catch(console.error);
+            return sendErrorEmbed(channel, 'Playlist không có bài hát nào hoặc không thể truy cập!');
+          }
 
-      player.on(AudioPlayerStatus.Idle, () => {
-        connection.destroy();
-        client.voiceConnections.delete(message.guild.id);
-        client.audioPlayers.delete(message.guild.id);
-      });
+          // Thêm các bài hát vào queue
+          clearQueue(message.guild.id);
+          for (const video of limitedVideos) {
+            const song = {
+              title: video.title,
+              url: video.url,
+              channel: video.channel.name,
+              duration: video.durationRaw || 'Không rõ',
+              thumbnail: video.thumbnails[0]?.url || null,
+              requester: message.author.toString()
+            };
+            addToQueue(message.guild.id, song);
+          }
+
+          // Xóa tin nhắn loading
+          await loadingMsg.delete().catch(console.error);
+
+          const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🎵 Đã thêm playlist')
+            .setDescription(`**${playlistInfo.title}**`)
+            .addFields(
+              { name: '📊 Số bài hát', value: `${limitedVideos.length}/20`, inline: true },
+              { name: '📺 Channel', value: playlistInfo.channel?.name || 'Không rõ', inline: true },
+              { name: '👤 Yêu cầu bởi', value: message.author.toString(), inline: false }
+            )
+            .setThumbnail(playlistInfo.thumbnail || null)
+            .setTimestamp();
+          
+          await channel.send({ embeds: [embed] });
+
+          // Bắt đầu phát playlist
+          await playNextSong(message.guild.id, client);
+
+        } catch (playlistError) {
+          console.error('Playlist error:', playlistError);
+          await loadingMsg.delete().catch(console.error);
+          sendErrorEmbed(channel, 'Không thể tải playlist! Playlist có thể bị hạn chế hoặc không tồn tại.');
+        }
+      } else {
+        // Xử lý video đơn lẻ
+        const isValidUrl = ytdl.validateURL(url);
+        if (!isValidUrl) {
+          await loadingMsg.delete().catch(console.error);
+          return sendErrorEmbed(channel, 'URL YouTube không hợp lệ! Vui lòng kiểm tra lại link.');
+        }
+
+        // Lấy thông tin video
+        let videoInfo;
+        try {
+          videoInfo = await ytdl.getInfo(url);
+        } catch (infoError) {
+          console.error('Error getting video info:', infoError);
+          await loadingMsg.delete().catch(console.error);
+          return sendErrorEmbed(channel, 'Không thể lấy thông tin video! Video có thể bị hạn chế hoặc không tồn tại.');
+        }
+
+        const song = {
+          title: videoInfo.videoDetails.title,
+          url: url,
+          channel: videoInfo.videoDetails.author.name,
+          duration: videoInfo.videoDetails.lengthSeconds ? 
+            `${Math.floor(videoInfo.videoDetails.lengthSeconds / 60)}:${(videoInfo.videoDetails.lengthSeconds % 60).toString().padStart(2, '0')}` : 'Không rõ',
+          thumbnail: videoInfo.videoDetails.thumbnails[0]?.url || null,
+          requester: message.author.toString()
+        };
+
+        // Thêm vào queue
+        clearQueue(message.guild.id);
+        addToQueue(message.guild.id, song);
+
+        // Xóa tin nhắn loading
+        await loadingMsg.delete().catch(console.error);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('🎶 Đang phát nhạc')
+          .setDescription(`**${song.title}**`)
+          .addFields(
+            { name: '🎵 Kênh', value: voiceChannel.name, inline: true },
+            { name: '📺 Channel', value: song.channel, inline: true },
+            { name: '⏱️ Thời lượng', value: song.duration, inline: true },
+            { name: '👤 Yêu cầu bởi', value: message.author.toString(), inline: false }
+          )
+          .setThumbnail(song.thumbnail)
+          .setTimestamp();
+        
+        await channel.send({ embeds: [embed] });
+
+        // Bắt đầu phát
+        await playNextSong(message.guild.id, client);
+      }
 
     } catch (error) {
       console.error('Play command error:', error);
-      sendErrorEmbed(channel, 'Có lỗi khi phát nhạc! Vui lòng thử lại.');
+      
+      // Xử lý các loại lỗi khác nhau
+      let errorMessage = 'Có lỗi khi phát nhạc!';
+      
+      if (error.message.includes('Video unavailable')) {
+        errorMessage = 'Video không khả dụng hoặc bị hạn chế!';
+      } else if (error.message.includes('Sign in to confirm your age')) {
+        errorMessage = 'Video có giới hạn độ tuổi, không thể phát!';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Lỗi mạng! Vui lòng thử lại sau.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'Hết thời gian chờ! Vui lòng thử lại.';
+      }
+      
+      sendErrorEmbed(channel, `${errorMessage} Vui lòng thử lại với video khác.`);
     }
   }
 
   if (command === 'stop') {
     trackCommandUsage('stop');
-    const connection = client.voiceConnections.get(message.guild.id);
-    if (connection) {
-      connection.destroy();
-      client.voiceConnections.delete(message.guild.id);
-      client.audioPlayers.delete(message.guild.id);
-      sendSuccessEmbed(channel, '⏹️ Đã dừng phát nhạc');
-    } else {
-      sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+    try {
+      const connection = client.voiceConnections.get(message.guild.id);
+      const player = client.audioPlayers.get(message.guild.id);
+      
+      if (connection && player) {
+        connection.destroy();
+        client.voiceConnections.delete(message.guild.id);
+        client.audioPlayers.delete(message.guild.id);
+        clearQueue(message.guild.id);
+        
+        const embed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('⏹️ Đã dừng phát nhạc')
+          .setDescription('Bot đã ngừng phát nhạc, xóa queue và rời khỏi voice channel.')
+          .setTimestamp();
+        
+        await channel.send({ embeds: [embed] });
+      } else {
+        sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+      }
+    } catch (error) {
+      console.error('Stop command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi dừng nhạc!');
     }
   }
 
   if (command === 'pause') {
     trackCommandUsage('pause');
-    const player = client.audioPlayers.get(message.guild.id);
-    if (player && player.state.status === 'playing') {
-      player.pause();
-      sendSuccessEmbed(channel, '⏸️ Đã tạm dừng');
-    } else {
-      sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+    try {
+      const player = client.audioPlayers.get(message.guild.id);
+      if (player && player.state.status === AudioPlayerStatus.Playing) {
+        player.pause();
+        
+        const embed = new EmbedBuilder()
+          .setColor(0xFFA500)
+          .setTitle('⏸️ Đã tạm dừng')
+          .setDescription('Nhạc đã được tạm dừng. Sử dụng `' + PREFIX + 'resume` để tiếp tục.')
+          .setTimestamp();
+        
+        await channel.send({ embeds: [embed] });
+      } else {
+        sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+      }
+    } catch (error) {
+      console.error('Pause command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi tạm dừng nhạc!');
     }
   }
 
   if (command === 'resume') {
     trackCommandUsage('resume');
-    const player = client.audioPlayers.get(message.guild.id);
-    if (player && player.state.status === 'paused') {
-      player.unpause();
-      sendSuccessEmbed(channel, '▶️ Đã tiếp tục phát');
-    } else {
-      sendErrorEmbed(channel, 'Bài hát không ở trạng thái tạm dừng!');
+    try {
+      const player = client.audioPlayers.get(message.guild.id);
+      if (player && player.state.status === AudioPlayerStatus.Paused) {
+        player.unpause();
+        
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('▶️ Đã tiếp tục phát')
+          .setDescription('Nhạc đã được tiếp tục phát.')
+          .setTimestamp();
+        
+        await channel.send({ embeds: [embed] });
+      } else {
+        sendErrorEmbed(channel, 'Bài hát không ở trạng thái tạm dừng!');
+      }
+    } catch (error) {
+      console.error('Resume command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi tiếp tục phát nhạc!');
+    }
+  }
+
+  if (command === 'nowplaying' || command === 'np') {
+    trackCommandUsage('nowplaying');
+    try {
+      const player = client.audioPlayers.get(message.guild.id);
+      const connection = client.voiceConnections.get(message.guild.id);
+      
+      if (!player || !connection) {
+        return sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+      }
+
+      const status = player.state.status;
+      const statusText = {
+        'playing': '▶️ Đang phát',
+        'paused': '⏸️ Đã tạm dừng',
+        'idle': '⏹️ Dừng',
+        'buffering': '🔄 Đang tải'
+      };
+
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🎶 Thông tin bài hát hiện tại')
+        .addFields(
+          { name: '📊 Trạng thái', value: statusText[status] || status, inline: true },
+          { name: '🎵 Voice Channel', value: connection.joinConfig.channelId ? `<#${connection.joinConfig.channelId}>` : 'Không rõ', inline: true }
+        )
+        .setFooter({ text: 'Sử dụng các lệnh âm nhạc khác để điều khiển' })
+        .setTimestamp();
+
+      await channel.send({ embeds: [embed] });
+      
+    } catch (error) {
+      console.error('Nowplaying command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi lấy thông tin bài hát!');
+    }
+  }
+
+  if (command === 'queue' || command === 'q') {
+    trackCommandUsage('queue');
+    try {
+      const queue = getQueue(message.guild.id);
+      
+      if (queue.songs.length === 0) {
+        return sendErrorEmbed(channel, 'Không có bài hát nào trong queue!');
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('🎵 Queue hiện tại')
+        .setDescription(`**${queue.songs.length}** bài hát trong queue`)
+        .setTimestamp();
+
+      // Hiển thị 10 bài hát đầu tiên
+      const songsToShow = queue.songs.slice(0, 10);
+      let queueText = '';
+      
+      songsToShow.forEach((song, index) => {
+        const prefix = index === queue.currentIndex ? '🎶' : '🎵';
+        const current = index === queue.currentIndex ? ' **(Đang phát)**' : '';
+        queueText += `${prefix} **${index + 1}.** ${song.title}${current}\n`;
+      });
+
+      if (queue.songs.length > 10) {
+        queueText += `\n... và ${queue.songs.length - 10} bài hát khác`;
+      }
+
+      embed.addFields({ name: '📋 Danh sách', value: queueText || 'Không có bài hát nào', inline: false });
+
+      if (queue.songs.length > 0) {
+        embed.addFields({
+          name: '📊 Thông tin',
+          value: `• Hiện tại: Bài ${queue.currentIndex + 1}/${queue.songs.length}\n• Trạng thái: ${queue.isPlaying ? '▶️ Đang phát' : '⏸️ Tạm dừng'}`,
+          inline: true
+        });
+      }
+
+      await channel.send({ embeds: [embed] });
+      
+    } catch (error) {
+      console.error('Queue command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi hiển thị queue!');
+    }
+  }
+
+  if (command === 'skip') {
+    trackCommandUsage('skip');
+    try {
+      const queue = getQueue(message.guild.id);
+      const player = client.audioPlayers.get(message.guild.id);
+      
+      if (!player || queue.songs.length === 0) {
+        return sendErrorEmbed(channel, 'Không có bài hát nào đang phát!');
+      }
+
+      if (queue.currentIndex >= queue.songs.length - 1) {
+        return sendErrorEmbed(channel, 'Đây là bài hát cuối cùng trong queue!');
+      }
+
+      const skippedSong = queue.songs[queue.currentIndex];
+      queue.currentIndex++;
+      
+      player.stop();
+      
+      const embed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('⏭️ Đã bỏ qua bài hát')
+        .setDescription(`**${skippedSong.title}**`)
+        .addFields(
+          { name: '▶️ Bài tiếp theo', value: queue.songs[queue.currentIndex]?.title || 'Không có', inline: false }
+        )
+        .setTimestamp();
+      
+      await channel.send({ embeds: [embed] });
+      
+    } catch (error) {
+      console.error('Skip command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi bỏ qua bài hát!');
+    }
+  }
+
+  if (command === 'clearqueue') {
+    trackCommandUsage('clearqueue');
+    try {
+      const queue = getQueue(message.guild.id);
+      
+      if (queue.songs.length === 0) {
+        return sendErrorEmbed(channel, 'Queue đã trống!');
+      }
+
+      const songCount = queue.songs.length;
+      clearQueue(message.guild.id);
+      
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🗑️ Đã xóa queue')
+        .setDescription(`Đã xóa **${songCount}** bài hát khỏi queue.`)
+        .setTimestamp();
+      
+      await channel.send({ embeds: [embed] });
+      
+    } catch (error) {
+      console.error('Clearqueue command error:', error);
+      sendErrorEmbed(channel, 'Có lỗi khi xóa queue!');
+    }
+  }
+
+  // ==================== LỆNH DM (ADMIN ONLY) ====================
+  if (command === 'dms') {
+    trackCommandUsage('dms');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    try {
+      const dmMessages = getDmMessages();
+      const recentMessages = dmMessages.slice(-10).reverse(); // 10 tin nhắn gần nhất
+
+      if (recentMessages.length === 0) {
+        return sendErrorEmbed(channel, 'Chưa có tin nhắn DM nào!');
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x7289DA)
+        .setTitle('📨 Tin nhắn DM gần đây')
+        .setDescription(`Tổng số tin nhắn: ${dmMessages.length}`)
+        .setFooter({ text: 'Hiển thị 10 tin nhắn gần nhất' })
+        .setTimestamp();
+
+      recentMessages.forEach((msg, index) => {
+        const time = new Date(msg.timestamp).toLocaleString('vi-VN');
+        const content = msg.content.length > 100 
+          ? msg.content.substring(0, 100) + '...' 
+          : msg.content;
+        
+        embed.addFields({
+          name: `#${index + 1} ${msg.author.tag} - ${time}`,
+          value: `📝 ${content || '*Không có nội dung*'}`,
+          inline: false
+        });
+      });
+
+      await channel.send({ embeds: [embed] });
+
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi hiển thị tin nhắn DM: ${error.message}`);
+    }
+  }
+
+  if (command === 'reply') {
+    trackCommandUsage('reply');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const userId = args[0];
+    const replyMessage = args.slice(1).join(' ');
+
+    if (!userId || !replyMessage) {
+      return sendErrorEmbed(channel, 'Sử dụng: `' + PREFIX + 'reply <user_id> <tin_nhắn>`');
+    }
+
+    try {
+      const user = await client.users.fetch(userId);
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('💌 Phản hồi từ LeiLaBOT')
+        .setDescription(replyMessage)
+        .setFooter({ text: 'LeiLaBOT Support Team' })
+        .setTimestamp();
+
+      await user.send({ embeds: [embed] });
+      await sendSuccessEmbed(channel, `Đã gửi phản hồi đến ${user.tag}!`);
+
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Không thể gửi tin nhắn cho user: ${error.message}`);
+    }
+  }
+
+  if (command === 'setdmlog') {
+    trackCommandUsage('setdmlog');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const logChannel = message.mentions.channels.first() || message.guild.channels.cache.get(args[0]);
+    if (!logChannel) {
+      return sendErrorEmbed(channel, 'Vui lòng đề cập đến kênh log hợp lệ!');
+    }
+
+    const config = getBotConfig();
+    config.dmLogChannel = logChannel.id;
+    setBotConfig(config);
+
+    await sendSuccessEmbed(channel, `Đã đặt kênh log DM: ${logChannel}`);
+  }
+
+  if (command === 'autoreply') {
+    trackCommandUsage('autoreply');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const config = getBotConfig();
+    config.autoReply = !config.autoReply;
+    setBotConfig(config);
+
+    const status = config.autoReply ? 'BẬT' : 'TẮT';
+    const color = config.autoReply ? 0x00FF00 : 0xFF0000;
+    
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle('⚙️ Tự động phản hồi DM')
+      .setDescription(`Đã ${config.autoReply ? 'BẬT' : 'TẮT'} tính năng tự động phản hồi tin nhắn DM.`)
+      .addFields(
+        { name: '📊 Trạng thái hiện tại', value: status, inline: true },
+        { name: '💡 Chức năng', value: 'Bot sẽ tự động phản hồi khi nhận được DM mới', inline: true }
+      )
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+  }
+
+  if (command === 'dmstats') {
+    trackCommandUsage('dmstats');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    try {
+      const dmMessages = getDmMessages();
+      const config = getBotConfig();
+      
+      // Thống kê theo người gửi
+      const userStats = {};
+      dmMessages.forEach(msg => {
+        const userId = msg.author.id;
+        if (!userStats[userId]) {
+          userStats[userId] = {
+            tag: msg.author.tag,
+            count: 0,
+            lastMessage: msg.timestamp
+          };
+        }
+        userStats[userId].count++;
+        if (msg.timestamp > userStats[userId].lastMessage) {
+          userStats[userId].lastMessage = msg.timestamp;
+        }
+      });
+
+      // Sắp xếp theo số lượng tin nhắn
+      const sortedUsers = Object.entries(userStats)
+        .sort(([,a], [,b]) => b.count - a.count)
+        .slice(0, 10);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x7289DA)
+        .setTitle('📊 Thống kê DM')
+        .setDescription(`Tổng số tin nhắn DM: **${dmMessages.length}**`)
+        .addFields(
+          { name: '📨 Kênh log DM', value: config.dmLogChannel ? `<#${config.dmLogChannel}>` : 'Chưa đặt', inline: true },
+          { name: '🤖 Tự động phản hồi', value: config.autoReply ? '✅ BẬT' : '❌ TẮT', inline: true },
+          { name: '👥 Người gửi nhiều nhất', value: sortedUsers.length > 0 ? `**${sortedUsers[0][1].tag}** (${sortedUsers[0][1].count} tin nhắn)` : 'Không có', inline: true }
+        )
+        .setTimestamp();
+
+      if (sortedUsers.length > 0) {
+        let topUsers = '';
+        sortedUsers.forEach(([userId, stats], index) => {
+          const time = new Date(stats.lastMessage).toLocaleDateString('vi-VN');
+          topUsers += `**${index + 1}.** ${stats.tag} - ${stats.count} tin nhắn (${time})\n`;
+        });
+        embed.addFields({ name: '🏆 Top 10 người gửi', value: topUsers, inline: false });
+      }
+
+      await channel.send({ embeds: [embed] });
+
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi hiển thị thống kê DM: ${error.message}`);
     }
   }
 
