@@ -2,7 +2,7 @@
   @Author: Your name
   @Date:   2025-10-04 17:50:50
   @Last Modified by:   Your name
-  @Last Modified time: 2025-10-04 17:50:58
+  @Last Modified time: 2025-10-08 19:52:52
 -->
 <!DOCTYPE html>
 <html lang="vi">
@@ -10,51 +10,385 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - LeiLaBOT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        h1, h2 { color: #333; }
-        .section { margin-bottom: 30px; }
+        :root {
+            --discord-blurple: #5865F2;
+            --discord-dark: #2C2F33;
+            --discord-darker: #23272A;
+            --discord-light: #99AAB5;
+            --discord-white: #FFFFFF;
+            --discord-green: #57F287;
+            --discord-yellow: #FEE75C;
+            --discord-red: #ED4245;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--discord-darker) 0%, var(--discord-dark) 100%);
+            color: var(--discord-light);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: rgba(35, 39, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        header {
+            background: linear-gradient(90deg, var(--discord-green) 0%, #43B581 100%);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.1)"/></svg>');
+            background-size: cover;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background-color: var(--discord-white);
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo i {
+            font-size: 40px;
+            color: var(--discord-green);
+        }
+
+        h1 {
+            color: var(--discord-white);
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            background-color: rgba(44, 47, 51, 0.6);
+            border-radius: 10px;
+            border-left: 4px solid var(--discord-green);
+            transition: var(--transition);
+        }
+
+        .section:hover {
+            background-color: rgba(44, 47, 51, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        h2 {
+            color: var(--discord-white);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        h2::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--discord-green);
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            font-weight: 300;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            position: relative;
+            padding-left: 15px;
+        }
+
+        li::before {
+            content: "•";
+            color: var(--discord-green);
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .data-table th {
+            background-color: var(--discord-green);
+            color: var(--discord-darker);
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-table tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        .highlight {
+            background-color: rgba(87, 242, 135, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--discord-green);
+            margin: 15px 0;
+        }
+
+        .badge {
+            display: inline-block;
+            background-color: var(--discord-green);
+            color: var(--discord-darker);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            background-color: rgba(35, 39, 42, 0.9);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .contact-btn {
+            display: inline-block;
+            background: linear-gradient(90deg, var(--discord-green) 0%, #43B581 100%);
+            color: var(--discord-darker);
+            padding: 12px 25px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 10px;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px rgba(87, 242, 135, 0.3);
+        }
+
+        .contact-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(87, 242, 135, 0.4);
+        }
+
+        .last-updated {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--discord-light);
+            opacity: 0.7;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .section {
+                padding: 20px;
+            }
+            
+            .data-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Chính sách Bảo mật - LeiLaBOT</h1>
-    
-    <div class="section">
-        <h2>1. Thu thập Thông tin</h2>
-        <p>LeiLaBOT chỉ thu thập và lưu trữ các thông tin cần thiết để hoạt động:</p>
-        <ul>
-            <li>ID Server và ID Kênh cho tính năng tin nhắn tự động</li>
-            <li>ID Người dùng cho tính năng sinh nhật và thống kê</li>
-            <li>Các thiết lập cấu hình của server</li>
-        </ul>
-    </div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i>🔒</i>
+            </div>
+            <h1>LeiLaBOT</h1>
+            <p class="subtitle">Privacy Policy</p>
+        </header>
+        
+        <div class="content">
+            <div class="section">
+                <h2>1. Thu thập Thông tin</h2>
+                <p>LeiLaBOT chỉ thu thập và lưu trữ các thông tin cần thiết để hoạt động đúng chức năng. Chúng tôi cam kết minh bạch về dữ liệu mà chúng tôi thu thập.</p>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Loại dữ liệu</th>
+                            <th>Mục đích sử dụng</th>
+                            <th>Thời gian lưu trữ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ID Server và ID Kênh</td>
+                            <td>Tin nhắn tự động, cấu hình</td>
+                            <td>Cho đến khi bị xóa</td>
+                        </tr>
+                        <tr>
+                            <td>ID Người dùng</td>
+                            <td>Tính năng sinh nhật, thống kê, cá nhân hóa</td>
+                            <td>Cho đến khi bị xóa</td>
+                        </tr>
+                        <tr>
+                            <td>Các thiết lập cấu hình</td>
+                            <td>Lưu tùy chọn server</td>
+                            <td>Cho đến khi bị xóa</td>
+                        </tr>
+                        <tr>
+                            <td>Lịch sử lệnh</td>
+                            <td>Phân tích và cải thiện trải nghiệm</td>
+                            <td>30 ngày</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="highlight">
+                    <p><strong>Lưu ý quan trọng:</strong> Chúng tôi không thu thập bất kỳ thông tin cá nhân nhạy cảm nào như tên thật, địa chỉ, số điện thoại, hay thông tin tài chính.</p>
+                </div>
+            </div>
 
-    <div class="section">
-        <h2>2. Sử dụng Thông tin</h2>
-        <p>Thông tin được sử dụng để:</p>
-        <ul>
-            <li>Gửi tin nhắn chào mừng và tạm biệt</li>
-            <li>Thống kê hoạt động server</li>
-            <li>Gửi tin nhắn tự động theo lịch trình</li>
-            <li>Lưu trữ tùy chọn cấu hình</li>
-        </ul>
-    </div>
+            <div class="section">
+                <h2>2. Sử dụng Thông tin</h2>
+                <p>Thông tin được thu thập chỉ được sử dụng cho các mục đích cụ thể sau:</p>
+                <ul>
+                    <li>Gửi tin nhắn chào mừng và tạm biệt</li>
+                    <li>Thống kê hoạt động server</li>
+                    <li>Gửi tin nhắn tự động theo lịch trình</li>
+                    <li>Lưu trữ tùy chọn cấu hình</li>
+                    <li>Cải thiện trải nghiệm người dùng</li>
+                    <li>Xử lý các tính năng cụ thể như âm nhạc, quản lý</li>
+                </ul>
+                
+                <p>Chúng tôi không sử dụng dữ liệu của bạn cho mục đích quảng cáo hoặc bán cho bên thứ ba.</p>
+            </div>
 
-    <div class="section">
-        <h2>3. Chia sẻ Thông tin</h2>
-        <p>Chúng tôi KHÔNG chia sẻ thông tin người dùng với bên thứ ba.</p>
-    </div>
+            <div class="section">
+                <h2>3. Chia sẻ Thông tin <span class="badge">KHÔNG BAO GIỜ</span></h2>
+                <p>Chúng tôi <strong>KHÔNG BAO GIỜ</strong> chia sẻ, bán hoặc cho thuê thông tin người dùng với bất kỳ bên thứ ba nào.</p>
+                
+                <div class="highlight">
+                    <p>Tất cả dữ liệu được lưu trữ cục bộ và chỉ được sử dụng bởi LeiLaBOT để cung cấp các dịch vụ đã hứa.</p>
+                </div>
+            </div>
 
-    <div class="section">
-        <h2>4. Bảo mật</h2>
-        <p>Tất cả dữ liệu được lưu trữ cục bộ và được bảo vệ.</p>
-    </div>
+            <div class="section">
+                <h2>4. Bảo mật Dữ liệu</h2>
+                <p>Chúng tôi thực hiện các biện pháp bảo mật thích hợp để bảo vệ thông tin của bạn:</p>
+                <ul>
+                    <li>Dữ liệu được lưu trữ cục bộ trong môi trường an toàn</li>
+                    <li>Truy cập được giới hạn chỉ cho các chức năng cần thiết</li>
+                    <li>Mã hóa dữ liệu nhạy cảm (nếu có)</li>
+                    <li>Đánh giá bảo mật định kỳ</li>
+                </ul>
+                
+                <p>Tuy nhiên, không có phương pháp truyền tải qua Internet hoặc phương pháp lưu trữ điện tử nào là an toàn 100%. Do đó, chúng tôi không thể đảm bảo an toàn tuyệt đối.</p>
+            </div>
 
-    <div class="section">
-        <h2>5. Liên hệ</h2>
-        <p>Nếu có thắc mắc, tham gia server hỗ trợ: https://discord.gg/9CFJxJUBj7</p>
-    </div>
+            <div class="section">
+                <h2>5. Quyền của Bạn</h2>
+                <p>Bạn có các quyền sau đây đối với dữ liệu của mình:</p>
+                <ul>
+                    <li><strong>Quyền truy cập:</strong> Bạn có thể yêu cầu xem dữ liệu chúng tôi lưu về bạn</li>
+                    <li><strong>Quyền sửa đổi:</strong> Bạn có thể cập nhật hoặc sửa đổi thông tin không chính xác</li>
+                    <li><strong>Quyền xóa:</strong> Bạn có thể yêu cầu xóa dữ liệu của mình khỏi hệ thống</li>
+                    <li><strong>Quyền từ chối:</strong> Bạn có thể từ chối thu thập dữ liệu bằng cách ngừng sử dụng bot</li>
+                </ul>
+                
+                <p>Để thực hiện các quyền này, vui lòng liên hệ với chúng tôi qua server hỗ trợ.</p>
+            </div>
 
-    <p><em>Cập nhật lần cuối: ${new Date().toLocaleDateString('vi-VN')}</em></p>
+            <div class="section">
+                <h2>6. Thay đổi Chính sách</h2>
+                <p>Chúng tôi có thể cập nhật chính sách bảo mật này theo thời gian. Chúng tôi sẽ thông báo về bất kỳ thay đổi nào bằng cách đăng chính sách bảo mật mới trên trang này.</p>
+                
+                <p>Chúng tôi khuyên bạn nên xem xét chính sách bảo mật này định kỳ để biết mọi thay đổi. Những thay đổi đối với chính sách bảo mật này có hiệu lực khi chúng được đăng trên trang này.</p>
+            </div>
+        </div>
+        
+        <footer>
+            <h2>Liên hệ & Hỗ trợ</h2>
+            <p>Nếu bạn có bất kỳ câu hỏi nào về Chính sách Bảo mật này hoặc muốn thực hiện quyền của mình, vui lòng liên hệ với chúng tôi:</p>
+            <a href="https://discord.gg/9CFJxJUBj7" class="contact-btn" target="_blank">Tham gia Server Hỗ trợ</a>
+            <p class="last-updated">Cập nhật lần cuối: 05/10/2024</p>
+        </footer>
+    </div>
 </body>
 </html>
