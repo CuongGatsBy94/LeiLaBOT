@@ -2,10 +2,10 @@
  * @Author: Your name
  * @Date:   2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-08 19:36:30
+ * @Last Modified time: 2025-10-09 18:56:59
  */
 require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionsBitField, Collection, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, Collection, ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ActivityType } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
 const playdl = require('play-dl');
@@ -159,7 +159,9 @@ function initializeFiles() {
     { path: dmMessagesPath, default: [] },
     { path: botConfigPath, default: { 
       dmLogChannel: "",
-      autoReply: false
+      autoReply: false,
+      scheduleChannel: "",
+      scheduleEnabled: false
     }}
   ];
 
@@ -236,7 +238,9 @@ function getBotConfig() {
   } catch (error) {
     return {
       dmLogChannel: "",
-      autoReply: false
+      autoReply: false,
+      scheduleChannel: "",
+      scheduleEnabled: false
     };
   }
 }
@@ -280,6 +284,337 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+
+// ==================== HÀM CẬP NHẬT STATUS BOT ====================
+
+function updateBotStatus() {
+  if (client.user) {
+    client.user.setPresence({
+      activities: [{
+        name: `| ${PREFIX}help`,
+        type: ActivityType.Listening // LISTENING - sẽ hiển thị "Đang nghe Cùng nghe nhạc | $help"
+      }],
+      status: 'online'
+    });
+    console.log(`🎵 Đã cập nhật status bot: Đang nghe Cùng nghe nhạc | ${PREFIX}help`);
+  }
+}
+
+// ==================== HỆ THỐNG TIN NHẮN ĐỊNH KỲ ====================
+
+function getVietnamTime() {
+  /** Lấy thời gian Việt Nam (UTC+7) */
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const vietnamTime = new Date(utc + (7 * 3600000));
+  return vietnamTime;
+}
+
+function logAction(action) {
+  /** Ghi log hành động */
+  const timestamp = new Date().toLocaleString('vi-VN');
+  console.log(`[${timestamp}] ${action}`);
+}
+
+// Danh sách tin nhắn random phong phú
+const SCHEDULE_MESSAGES = {
+  morning: [
+    "🌅 **Chào buổi sáng cả nhà!** Một ngày mới tràn đầy năng lượng và may mắn! ☀️",
+    "🌞 **Buổi sáng tốt lành!** Hy vọng mọi người có một ngày làm việc hiệu quả! 💪",
+    "☀️ **Good morning!** Hãy bắt đầu ngày mới với tinh thần tích cực nào! ✨",
+    "🌄 **Chúc cả nhà buổi sáng an lành!** Đừng quên ăn sáng đầy đủ nhé! 🍳",
+    "🌤️ **Buổi sáng vui vẻ!** Hôm nay sẽ là một ngày tuyệt vời! 🎉",
+    "🕊️ **Bình minh thức giấc!** Hãy hít thở sâu và đón chào ngày mới! 🌈",
+    "🍀 **Sáng mai tươi mới!** Cơ hội mới đang chờ đón bạn! 🚀",
+    "🌻 **Ngày mới nở hoa!** Hãy tỏa sáng như những đóa hoa hướng dương! 🌼",
+    "📈 **Sẵn sàng cho ngày mới!** Mọi mục tiêu đều có thể đạt được! 🎯",
+    "⚡ **Năng lượng buổi sáng!** Hãy bắt đầu với tốc độ cao! 🏃‍♂️"
+  ],
+  
+  morningTips: [
+    "💡 **Mẹo:** Uống một ly nước ấm để khởi động ngày mới!",
+    "💡 **Mẹo:** Lên kế hoạch công việc trong ngày để hiệu quả hơn!",
+    "💡 **Mẹo:** Tập thể dục nhẹ nhàng để cơ thể tỉnh táo!",
+    "💡 **Mẹo:** Nghe nhạc tích cực để có tâm trạng tốt!",
+    "💡 **Mẹo:** Ăn sáng đầy đủ dinh dưỡng!",
+    "💡 **Mẹo:** Thiền 5 phút để tâm trí thư thái!",
+    "💡 **Mẹo:** Viết ra 3 điều biết ơn trong ngày!",
+    "💡 **Mẹo:** Đọc tin tức tích cực để bắt đầu ngày mới!",
+    "💡 **Mẹo:** Mỉm cười trước gương - nó rất hiệu quả!",
+    "💡 **Mẹo:** Chuẩn bị trang phục từ tối hôm trước!"
+  ],
+
+  lunch: [
+    "🍱 **Đến giờ ăn trưa rồi cả nhà ơi!** Nhớ ăn uống đủ chất nhé!",
+    "🥗 **Trưa nay ăn gì nhỉ?** Đừng bỏ bữa trưa quan trọng nhé!",
+    "🍜 **Giờ ăn trưa!** Nghỉ ngơi một chút để nạp năng lượng!",
+    "🥘 **Bon appétit!** Chúc mọi người có bữa trưa ngon miệng!",
+    "🍽️ **Ăn trưa thôi nào!** Nhớ ăn chậm nhai kỹ nhé!",
+    "🍛 **Bữa trưa dinh dưỡng!** Nạp năng lượng cho buổi chiều hiệu quả!",
+    "🥪 **Nghỉ trưa thôi!** Tạm gác công việc để thưởng thức bữa ăn!",
+    "🍲 **Món ngon trưa nay!** Chúc mọi người ăn ngon miệng!",
+    "🥙 **Giờ nghỉ trưa!** Thư giãn và tái tạo năng lượng!",
+    "🍎 **Ăn trưa lành mạnh!** Nhớ ăn nhiều rau xanh nhé!"
+  ],
+
+  evening: [
+    "🌇 **Chiều muộn rồi đấy!** Sắp kết thúc một ngày làm việc rồi!",
+    "🌆 **Buổi chiều tốt lành!** Cố gắng hoàn thành nốt công việc cuối ngày nhé!",
+    "🏙️ **Xế chiều rồi!** Đừng quên nghỉ ngơi và thư giãn!",
+    "🌃 **Chiều tà an lành!** Chuẩn bị kết thúc một ngày làm việc hiệu quả!",
+    "🌄 **Hoàng hôn sắp xuống!** Nhìn lại những gì đã đạt được hôm nay nào!",
+    "📊 **Kết thúc ngày làm việc!** Tự hào về những gì bạn đã hoàn thành!",
+    "🎯 **Chiều tà suy ngẫm!** Hôm nay bạn đã học được điều gì mới?",
+    "🌆 **Giờ tan làm!** Chuẩn bị cho buổi tối thư giãn nào!",
+    "🏡 **Về nhà thôi!** Nghỉ ngơi và tận hưởng buổi tối!",
+    "🌟 **Hoàn thành xuất sắc!** Bạn đã làm việc chăm chỉ cả ngày!"
+  ],
+
+  nightActivity: [
+    "🎮 **Tối rồi!** Có ai online game không nào?",
+    "📺 **Buổi tối vui vẻ!** Xem phim gì hay tối nay?",
+    "🎵 **Âm nhạc buổi tối!** Cùng nghe nhạc thư giãn nào!",
+    "📚 **Tối nay đọc sách?** Hay học thêm điều gì mới?",
+    "💬 **Trò chuyện tối!** Có ai muốn tâm sự không?",
+    "🎲 **Tối nay chơi gì?** Board game hay video game?",
+    "🍿 **Movie night!** Cùng xem phim và thư giãn!",
+    "🎨 **Thời gian sáng tạo!** Vẽ, viết hay làm điều gì đó nghệ thuật!",
+    "💻 **Học tập buổi tối!** Trau dồi thêm kỹ năng mới!",
+    "🎤 **Karaoke tại gia!** Hát hò cho vui cửa vui nhà!"
+  ],
+
+  goodNight: [
+    "🌙 **Chúc cả nhà ngủ ngon!** Đừng thức khuya quá nhé! 😴",
+    "✨ **Good night!** Ngủ thật ngon và mơ những giấc mơ đẹp! 💫",
+    "🌌 **Đêm đã khuya!** Hãy tắt máy và nghỉ ngơi thôi nào! 🛌",
+    "🌠 **Chúc ngủ ngon!** Mai lại là một ngày mới tràn đầy hi vọng! 🌅",
+    "💤 **Đến giờ đi ngủ rồi!** Nhớ thư giãn và tắt hết thiết bị điện tử! 📴",
+    "🛏️ **Giấc ngủ ngon!** Ngủ đủ giấc để mai thức dậy thật tỉnh táo! 🌞",
+    "🌜 **Đêm yên bình!** Chúc mọi người có giấc ngủ thật sâu! 😊",
+    "⭐ **Ngủ ngon nhé!** Những vì sao sẽ canh giấc ngủ cho bạn! 🌟",
+    "🌃 **Đêm khuya thanh vắng!** Hãy tắt đèn và chìm vào giấc mơ! 💭",
+    "🦉 **Đến giờ ngủ rồi!** Ngủ sớm để mai dậy sớm nào! 🌄"
+  ],
+
+  sleepTips: [
+    "💡 **Mẹo:** Tắt các thiết bị điện tử 30 phút trước khi ngủ",
+    "💡 **Mẹo:** Đọc sách giúp thư giãn và dễ ngủ hơn",
+    "💡 **Mẹo:** Nghe nhạc nhẹ hoặc âm thanh thiên nhiên",
+    "💡 **Mẹo:** Giữ phòng ngủ mát mẻ và thoáng khí",
+    "💡 **Mẹo:** Uống một ly sữa ấm trước khi ngủ",
+    "💡 **Mẹo:** Tập thở sâu 4-7-8 để dễ ngủ hơn",
+    "💡 **Mẹo:** Viết nhật ký để giải tỏa suy nghĩ",
+    "💡 **Mẹo:** Dùng tinh dầu oải hương thư giãn",
+    "💡 **Mẹo:** Giữ phòng ngủ tối hoàn toàn",
+    "💡 **Mẹo:** Thiền 5 phút trước khi ngủ"
+  ]
+};
+
+function getRandomMessage(messages) {
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+async function sendMorningMessage(client) {
+  /** Tin nhắn chào buổi sáng lúc 8:00 */
+  try {
+    const config = getBotConfig();
+    if (!config.scheduleChannel || !config.scheduleEnabled) return;
+
+    const channel = client.channels.cache.get(config.scheduleChannel);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xFFD700) // Gold
+      .setTitle('🌅 CHÀO BUỔI SÁNG - 08:00')
+      .setDescription(getRandomMessage(SCHEDULE_MESSAGES.morning))
+      .addFields(
+        {
+          name: '📅 Hôm nay là',
+          value: `<t:${Math.floor(Date.now() / 1000)}:D>`,
+          inline: true
+        },
+        {
+          name: '⏰ Bây giờ là',
+          value: `<t:${Math.floor(Date.now() / 1000)}:t>`,
+          inline: true
+        },
+        {
+          name: '🌟 Lời khuyên buổi sáng',
+          value: getRandomMessage(SCHEDULE_MESSAGES.morningTips),
+          inline: false
+        }
+      )
+      .setFooter({ text: 'Chúc bạn một ngày tuyệt vời! 🌈' })
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logAction('✅ Đã gửi tin nhắn chào buổi sáng lúc 08:00');
+  } catch (error) {
+    logAction(`❌ Lỗi khi gửi tin nhắn buổi sáng: ${error.message}`);
+  }
+}
+
+async function sendLunchMessage(client) {
+  /** Nhắc ăn trưa lúc 12:00 */
+  try {
+    const config = getBotConfig();
+    if (!config.scheduleChannel || !config.scheduleEnabled) return;
+
+    const channel = client.channels.cache.get(config.scheduleChannel);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xFFA500) // Orange
+      .setTitle('🍽️ GIỜ ĂN TRƯA - 12:00')
+      .setDescription(getRandomMessage(SCHEDULE_MESSAGES.lunch))
+      .addFields(
+        {
+          name: '⏰ Thời gian nghỉ ngơi',
+          value: 'Hãy dành ít nhất 30 phút để thư giãn và nạp năng lượng! 💪',
+          inline: false
+        }
+      )
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logAction('✅ Đã gửi tin nhắn nhắc ăn trưa lúc 12:00');
+  } catch (error) {
+    logAction(`❌ Lỗi khi gửi tin nhắn ăn trưa: ${error.message}`);
+  }
+}
+
+async function sendEveningMessage(client) {
+  /** Tin nhắn chiều tà lúc 17:30 */
+  try {
+    const config = getBotConfig();
+    if (!config.scheduleChannel || !config.scheduleEnabled) return;
+
+    const channel = client.channels.cache.get(config.scheduleChannel);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xFF8C00) // Dark Orange
+      .setTitle('🌇 CHIỀU TÀ - 17:30')
+      .setDescription(getRandomMessage(SCHEDULE_MESSAGES.evening))
+      .addFields(
+        {
+          name: '📊 Hoàn thành ngày làm việc',
+          value: 'Hãy tự hào về những gì bạn đã làm được hôm nay! 🎯',
+          inline: false
+        }
+      )
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logAction('✅ Đã gửi tin nhắn buổi chiều lúc 17:30');
+  } catch (error) {
+    logAction(`❌ Lỗi khi gửi tin nhắn buổi chiều: ${error.message}`);
+  }
+}
+
+async function sendNightActivityMessage(client) {
+  /** Nhắc nhở hoạt động buổi tối lúc 20:00 */
+  try {
+    const config = getBotConfig();
+    if (!config.scheduleChannel || !config.scheduleEnabled) return;
+
+    const channel = client.channels.cache.get(config.scheduleChannel);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x9370DB) // Medium Purple
+      .setTitle('🌃 BUỔI TỐI - 20:00')
+      .setDescription(getRandomMessage(SCHEDULE_MESSAGES.nightActivity))
+      .addFields(
+        {
+          name: '⏳ Còn 2 tiếng nữa là đến giờ ngủ',
+          value: 'Hãy tận hưởng buổi tối thật trọn vẹn! 🎮🎬🎵',
+          inline: false
+        }
+      )
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logAction('✅ Đã gửi tin nhắn nhắc buổi tối lúc 20:00');
+  } catch (error) {
+    logAction(`❌ Lỗi khi gửi tin nhắn buổi tối: ${error.message}`);
+  }
+}
+
+async function sendGoodNightMessage(client) {
+  /** Tin nhắn chúc ngủ ngon lúc 22:00 */
+  try {
+    const config = getBotConfig();
+    if (!config.scheduleChannel || !config.scheduleEnabled) return;
+
+    const channel = client.channels.cache.get(config.scheduleChannel);
+    if (!channel) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x4B0082) // Indigo
+      .setTitle('🌙 CHÚC NGỦ NGON - 22:00')
+      .setDescription(getRandomMessage(SCHEDULE_MESSAGES.goodNight))
+      .addFields(
+        {
+          name: '🌟 Mẹo ngủ ngon',
+          value: getRandomMessage(SCHEDULE_MESSAGES.sleepTips),
+          inline: false
+        },
+        {
+          name: '📅 Ngày mai',
+          value: 'Hẹn gặp lại vào buổi sáng! 🌅',
+          inline: true
+        }
+      )
+      .setFooter({ text: 'Sweet dreams! 💫' })
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logAction('✅ Đã gửi tin nhắn chúc ngủ ngon lúc 22:00');
+  } catch (error) {
+    logAction(`❌ Lỗi khi gửi tin nhắn chúc ngủ ngon: ${error.message}`);
+  }
+}
+
+// Thiết lập lịch trình
+function setupScheduledMessages(client) {
+  // 8:00 sáng - Chào buổi sáng
+  cron.schedule('0 8 * * *', () => {
+    sendMorningMessage(client);
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
+  // 12:00 trưa - Ăn trưa
+  cron.schedule('0 12 * * *', () => {
+    sendLunchMessage(client);
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
+  // 17:30 chiều - Chiều tà
+  cron.schedule('30 17 * * *', () => {
+    sendEveningMessage(client);
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
+  // 20:00 tối - Hoạt động tối
+  cron.schedule('0 20 * * *', () => {
+    sendNightActivityMessage(client);
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
+  // 22:00 đêm - Chúc ngủ ngon
+  cron.schedule('0 22 * * *', () => {
+    sendGoodNightMessage(client);
+  }, {
+    timezone: 'Asia/Ho_Chi_Minh'
+  });
+
+  console.log('⏰ Đã thiết lập hệ thống tin nhắn định kỳ');
+}
 
 // ==================== HỆ THỐNG XỬ LÝ TIN NHẮN DM ====================
 
@@ -479,15 +814,12 @@ client.once('ready', () => {
   console.log(`📊 Đang quản lý ${client.guilds.cache.size} server`);
   console.log(`🔧 Prefix hiện tại: ${PREFIX}`);
   
-  // THIẾT LẬP STATUS - HIỂN THỊ DÒNG CHỮ BÊN DƯỚI TÊN BOT
-  client.user.setPresence({
-    activities: [{
-      name: ` | ${PREFIX}help`,
-      type: 2 // LISTENING - sẽ hiển thị "Đang nghe Cùng nghe nhạc | $help"
-    }],
-    status: 'online'
-  });
-  
+  // Thiết lập status cho bot
+  updateBotStatus();
+
+  // Thiết lập tin nhắn định kỳ
+  setupScheduledMessages(client);
+
   const config = getWelcomeConfig();
   if (config.welcomeChannel) {
     console.log(`🎉 Kênh chào mừng: ${config.welcomeChannel}`);
@@ -499,6 +831,10 @@ client.once('ready', () => {
   const botConfig = getBotConfig();
   if (botConfig.dmLogChannel) {
     console.log(`📩 Kênh log DM: ${botConfig.dmLogChannel}`);
+  }
+  if (botConfig.scheduleChannel) {
+    console.log(`⏰ Kênh schedule: ${botConfig.scheduleChannel}`);
+    console.log(`📅 Tin nhắn định kỳ: ${botConfig.scheduleEnabled ? 'BẬT' : 'TẮT'}`);
   }
   
   botStartTime = Date.now();
@@ -665,6 +1001,10 @@ client.on('messageCreate', async message => {
         { 
           name: '📨 DM (ADMIN ONLY)', 
           value: '`dms` - Xem tin nhắn DM\n`setdmlog` - Đặt kênh log DM\n`autoreply` - Bật/tắt auto reply' 
+        },
+        { 
+          name: '⏰ TIN NHẮN ĐỊNH KỲ', 
+          value: '`setschedule` - Cấu hình tin nhắn tự động\n`testschedule` - Kiểm tra tin nhắn định kỳ' 
         }
       )
       .setFooter({ text: `LeiLaBOT • ${new Date().getFullYear()}` })
@@ -694,6 +1034,176 @@ client.on('messageCreate', async message => {
     } catch (error) {
       console.error(error);
       sendErrorEmbed(channel, `Lỗi khi hiển thị thông tin bot: ${error.message}`);
+    }
+  }
+
+  // ==================== LỆNH SETPREFIX ====================
+  if (command === 'setprefix') {
+    trackCommandUsage('setprefix');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const newPrefix = args[0];
+    if (!newPrefix || newPrefix.length > 3) {
+      return sendErrorEmbed(channel, 'Prefix phải có từ 1-3 ký tự!');
+    }
+
+    const oldPrefix = PREFIX;
+    PREFIX = newPrefix;
+    setPrefix(newPrefix);
+    
+    // Cập nhật status của bot với prefix mới
+    updateBotStatus();
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('✅ Đã đổi prefix')
+      .setDescription(`Prefix đã được thay đổi từ \`${oldPrefix}\` thành \`${newPrefix}\``)
+      .addFields(
+        { name: 'Prefix mới', value: `\`${newPrefix}\``, inline: true },
+        { name: 'Ví dụ', value: `\`${newPrefix}help\``, inline: true }
+      )
+      .setTimestamp();
+    
+    await channel.send({ embeds: [embed] });
+  }
+
+  if (command === 'prefix') {
+    trackCommandUsage('prefix');
+    const embed = new EmbedBuilder()
+      .setColor(0x0099FF)
+      .setTitle('🔧 Prefix hiện tại')
+      .setDescription(`Prefix hiện tại của bot là: \`${PREFIX}\``)
+      .addFields(
+        { name: 'Sử dụng lệnh', value: `\`${PREFIX}help\` - để xem danh sách lệnh` },
+        { name: 'Đổi prefix', value: `\`${PREFIX}setprefix <prefix mới>\` - (chỉ admin)` }
+      )
+      .setTimestamp();
+    
+    await channel.send({ embeds: [embed] });
+  }
+
+  // ==================== LỆNH TIN NHẮN ĐỊNH KỲ ====================
+  if (command === 'setschedule') {
+    trackCommandUsage('setschedule');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const subCommand = args[0];
+    const config = getBotConfig();
+
+    try {
+      switch (subCommand) {
+        case 'channel':
+          const scheduleChannel = message.mentions.channels.first() || message.guild.channels.cache.get(args[1]);
+          if (!scheduleChannel) {
+            return sendErrorEmbed(channel, 'Vui lòng đề cập đến một kênh hợp lệ!');
+          }
+          config.scheduleChannel = scheduleChannel.id;
+          setBotConfig(config);
+          await sendSuccessEmbed(channel, `Đã đặt kênh tin nhắn định kỳ: ${scheduleChannel}`);
+          break;
+
+        case 'enable':
+          config.scheduleEnabled = true;
+          setBotConfig(config);
+          await sendSuccessEmbed(channel, '✅ Đã BẬT hệ thống tin nhắn định kỳ');
+          break;
+
+        case 'disable':
+          config.scheduleEnabled = false;
+          setBotConfig(config);
+          await sendSuccessEmbed(channel, '❌ Đã TẮT hệ thống tin nhắn định kỳ');
+          break;
+
+        case 'info':
+          const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('⏰ Thông tin tin nhắn định kỳ')
+            .addFields(
+              { name: '📊 Trạng thái', value: config.scheduleEnabled ? '🟢 Đang BẬT' : '🔴 Đang TẮT', inline: true },
+              { name: '📺 Kênh', value: config.scheduleChannel ? `<#${config.scheduleChannel}>` : 'Chưa đặt', inline: true },
+              { name: '⏰ Lịch trình', value: '8:00, 12:00, 17:30, 20:00, 22:00', inline: false }
+            )
+            .setTimestamp();
+          
+          await channel.send({ embeds: [embed] });
+          break;
+
+        default:
+          const helpEmbed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('🛠️ Hướng dẫn lệnh setschedule')
+            .addFields(
+              { name: '🎯 Các lệnh con', value: 
+                '`channel <#channel>` - Đặt kênh tin nhắn định kỳ\n' +
+                '`enable` - Bật tin nhắn định kỳ\n' +
+                '`disable` - Tắt tin nhắn định kỳ\n' +
+                '`info` - Xem thông tin cấu hình'
+              }
+            );
+          
+          await channel.send({ embeds: [helpEmbed] });
+          break;
+      }
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi cấu hình: ${error.message}`);
+    }
+  }
+
+  if (command === 'testschedule') {
+    trackCommandUsage('testschedule');
+    if (!isAdmin(message.member)) {
+      return sendErrorEmbed(channel, 'Bạn không có quyền sử dụng lệnh này!');
+    }
+
+    const type = args[0]?.toLowerCase();
+    try {
+      switch (type) {
+        case 'morning':
+          await sendMorningMessage(client);
+          await sendSuccessEmbed(channel, '✅ Đã gửi tin nhắn buổi sáng thử nghiệm');
+          break;
+        case 'lunch':
+          await sendLunchMessage(client);
+          await sendSuccessEmbed(channel, '✅ Đã gửi tin nhắn ăn trưa thử nghiệm');
+          break;
+        case 'evening':
+          await sendEveningMessage(client);
+          await sendSuccessEmbed(channel, '✅ Đã gửi tin nhắn buổi chiều thử nghiệm');
+          break;
+        case 'night':
+          await sendNightActivityMessage(client);
+          await sendSuccessEmbed(channel, '✅ Đã gửi tin nhắn buổi tối thử nghiệm');
+          break;
+        case 'goodnight':
+          await sendGoodNightMessage(client);
+          await sendSuccessEmbed(channel, '✅ Đã gửi tin nhắn chúc ngủ ngon thử nghiệm');
+          break;
+        default:
+          const embed = new EmbedBuilder()
+            .setColor(0x0099FF)
+            .setTitle('🧪 Kiểm tra tin nhắn định kỳ')
+            .setDescription('Sử dụng lệnh để kiểm tra các loại tin nhắn:')
+            .addFields(
+              { name: 'Các loại tin nhắn', value: 
+                '`morning` - Tin nhắn buổi sáng\n' +
+                '`lunch` - Tin nhắn ăn trưa\n' +
+                '`evening` - Tin nhắn buổi chiều\n' +
+                '`night` - Tin nhắn buổi tối\n' +
+                '`goodnight` - Tin nhắn chúc ngủ ngon'
+              }
+            );
+          
+          await channel.send({ embeds: [embed] });
+          break;
+      }
+    } catch (error) {
+      console.error(error);
+      sendErrorEmbed(channel, `Lỗi khi kiểm tra tin nhắn: ${error.message}`);
     }
   }
 
