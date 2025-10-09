@@ -89,6 +89,7 @@ Tạo file .env và thêm các biến sau:
 env
 DISCORD_TOKEN=your_discord_bot_token_here
 CHANNEL_ID=your_channel_id_here
+
 Bước 4: Chạy bot
 bash
 node bot.js
