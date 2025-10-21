@@ -1,0 +1,294 @@
+<!-- 
+  @Author: Your name
+  @Date:   2025-10-04 17:50:37
+  @Last Modified by:   Your name
+  @Last Modified time: 2025-10-08 19:48:42
+-->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service - LeiLaBOT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --discord-blurple: #5865F2;
+            --discord-dark: #2C2F33;
+            --discord-darker: #23272A;
+            --discord-light: #99AAB5;
+            --discord-white: #FFFFFF;
+            --discord-green: #57F287;
+            --discord-yellow: #FEE75C;
+            --discord-red: #ED4245;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--discord-darker) 0%, var(--discord-dark) 100%);
+            color: var(--discord-light);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: rgba(35, 39, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        header {
+            background: linear-gradient(90deg, var(--discord-blurple) 0%, #8A63D2 100%);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.1)"/></svg>');
+            background-size: cover;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background-color: var(--discord-white);
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo i {
+            font-size: 40px;
+            color: var(--discord-blurple);
+        }
+
+        h1 {
+            color: var(--discord-white);
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            background-color: rgba(44, 47, 51, 0.6);
+            border-radius: 10px;
+            border-left: 4px solid var(--discord-blurple);
+            transition: var(--transition);
+        }
+
+        .section:hover {
+            background-color: rgba(44, 47, 51, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        h2 {
+            color: var(--discord-white);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        h2::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--discord-blurple);
+            border-radius: 50%;
+            margin-right: 12px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            font-weight: 300;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            position: relative;
+            padding-left: 15px;
+        }
+
+        li::before {
+            content: "•";
+            color: var(--discord-blurple);
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .highlight {
+            background-color: rgba(88, 101, 242, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid var(--discord-blurple);
+            margin: 15px 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            background-color: rgba(35, 39, 42, 0.9);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .contact-btn {
+            display: inline-block;
+            background: linear-gradient(90deg, var(--discord-blurple) 0%, #8A63D2 100%);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 10px;
+            transition: var(--transition);
+            box-shadow: 0 4px 10px rgba(88, 101, 242, 0.3);
+        }
+
+        .contact-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(88, 101, 242, 0.4);
+        }
+
+        .last-updated {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--discord-light);
+            opacity: 0.7;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <!-- Icon placeholder - bạn có thể thay bằng logo thực tế -->
+                <i>🤖</i>
+            </div>
+            <h1>LeiLaBOT</h1>
+            <p class="subtitle">Terms of Service</p>
+        </header>
+        
+        <div class="content">
+            <div class="section">
+                <h2>1. Chấp nhận Điều khoản</h2>
+                <p>Bằng cách sử dụng LeiLaBOT, bạn đồng ý với các điều khoản và điều kiện được nêu trong tài liệu này. Nếu bạn không đồng ý với bất kỳ phần nào của các điều khoản này, vui lòng ngừng sử dụng bot ngay lập tức.</p>
+            </div>
+
+            <div class="section">
+                <h2>2. Sử dụng Dịch vụ</h2>
+                <p>Bạn đồng ý sử dụng LeiLaBOT theo đúng quy định của Discord ToS (Điều khoản Dịch vụ) và các quy tắc cộng đồng. Bạn chịu trách nhiệm về mọi hoạt động xảy ra dưới tài khoản của mình.</p>
+                <div class="highlight">
+                    <p>LeiLaBOT được cung cấp miễn phí và chúng tôi có quyền từ chối dịch vụ cho bất kỳ ai, vào bất kỳ lúc nào, vì bất kỳ lý do gì.</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>3. Hạn chế sử dụng</h2>
+                <p>Không sử dụng bot cho mục đích bất hợp pháp hoặc vi phạm các quy tắc sau:</p>
+                <ul>
+                    <li>Spam, flood hoặc gửi tin nhắn hàng loạt không được phép</li>
+                    <li>Quảng cáo, tiếp thị hoặc các hình thức quảng bá thương mại trái phép</li>
+                    <li>Phân phối nội dung độc hại, phần mềm độc hại hoặc vi-rút</li>
+                    <li>Thu thập thông tin người dùng trái phép</li>
+                    <li>Vi phạm bản quyền hoặc quyền sở hữu trí tuệ</li>
+                    <li>Quấy rối, đe dọa hoặc làm nhục người khác</li>
+                </ul>
+            </div>
+
+            <div class="section">
+                <h2>4. Quyền sở hữu</h2>
+                <p>LeiLaBOT được phát triển và duy trì bởi CuongGatsBy94. Tất cả các quyền sở hữu trí tuệ liên quan đến bot thuộc về nhà phát triển.</p>
+                <p>Bạn không được phép sao chép, sửa đổi, phân phối hoặc bán bất kỳ phần nào của bot mà không có sự cho phép bằng văn bản.</p>
+            </div>
+
+            <div class="section">
+                <h2>5. Thay đổi Dịch vụ</h2>
+                <p>Chúng tôi có quyền sửa đổi, tạm ngừng hoặc ngừng cung cấp dịch vụ (hoặc bất kỳ phần nào của dịch vụ) bất cứ lúc nào mà không cần thông báo trước. Chúng tôi sẽ không chịu trách nhiệm nếu bot không khả dụng vào bất kỳ thời điểm nào.</p>
+            </div>
+
+            <div class="section">
+                <h2>6. Bảo mật và Quyền riêng tư</h2>
+                <p>LeiLaBOT có thể thu thập và lưu trữ một số dữ liệu cần thiết để hoạt động đúng chức năng. Chúng tôi cam kết bảo vệ quyền riêng tư của bạn và không chia sẻ dữ liệu cá nhân với bên thứ ba mà không có sự đồng ý của bạn.</p>
+                <p>Dữ liệu được lưu trữ có thể bao gồm ID người dùng, ID máy chủ và các cài đặt liên quan đến chức năng của bot.</p>
+            </div>
+        </div>
+        
+        <footer>
+            <h2>Liên hệ & Hỗ trợ</h2>
+            <p>Nếu bạn có bất kỳ câu hỏi nào về các Điều khoản Dịch vụ này, vui lòng liên hệ với chúng tôi:</p>
+            <a href="https://discord.gg/9CFJxJUBj7" class="contact-btn" target="_blank">Tham gia Server Hỗ trợ</a>
+            <p class="last-updated">Cập nhật lần cuối: 05/10/2024</p>
+        </footer>
+    </div>
+</body>
+</html>
