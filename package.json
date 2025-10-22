@@ -1,7 +1,7 @@
 {
     "name": "leilabot",
     "version": "1.0.0",
-    "description": "LeiLaBOT - Discord Bot Đa Năng Việt Nam",
+    "description": "LeiLaBOT - Discord Bot Đa Năng ",
     "main": "index.js",
     "scripts": {
       "start": "node index.js",
