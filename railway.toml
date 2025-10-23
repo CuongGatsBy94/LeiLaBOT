@@ -1,0 +1,13 @@
+[service]
+build.command = "npm install"
+start.command = "node index.js"
+
+[service.healthcheck]
+path = "/"
+port = 3000
+timeout = 30
+interval = 15
+max_retries = 3
+
+[deploy]
+restart_policy = "always"
