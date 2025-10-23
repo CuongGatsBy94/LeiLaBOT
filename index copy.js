@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-23 22:25:07
+ * @Last Modified time: 2025-10-23 22:02:49
  */
 
 require('dotenv').config();
@@ -14,8 +14,7 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    Collection,
-    PermissionsBitField
+    Collection
 } = require('discord.js');
 const { 
     joinVoiceChannel, 
@@ -31,65 +30,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const cron = require('node-cron');
 const translate = require('@vitalets/google-translate-api');
-
-// ==================== HỆ THỐNG LOGGING CHUYÊN NGHIỆP ====================
-
-class Logger {
-    static log(level, message, data = null) {
-        const timestamp = new Date().toLocaleString('vi-VN', { 
-            timeZone: 'Asia/Ho_Chi_Minh',
-            hour12: false 
-        });
-        const emoji = {
-            info: '📝',
-            success: '✅',
-            warning: '⚠️',
-            error: '❌',
-            debug: '🐛',
-            music: '🎵',
-            event: '🎪',
-            command: '⚡'
-        }[level] || '📄';
-
-        console.log(`[${timestamp}] ${emoji} [${level.toUpperCase()}] ${message}`);
-        
-        if (data && process.env.DEBUG === 'true') {
-            console.log(`[${timestamp}] 🔍 [DEBUG]`, data);
-        }
-    }
-
-    static info(message, data = null) {
-        this.log('info', message, data);
-    }
-
-    static success(message, data = null) {
-        this.log('success', message, data);
-    }
-
-    static warn(message, data = null) {
-        this.log('warning', message, data);
-    }
-
-    static error(message, data = null) {
-        this.log('error', message, data);
-    }
-
-    static debug(message, data = null) {
-        this.log('debug', message, data);
-    }
-
-    static music(message, data = null) {
-        this.log('music', message, data);
-    }
-
-    static event(message, data = null) {
-        this.log('event', message, data);
-    }
-
-    static command(message, data = null) {
-        this.log('command', message, data);
-    }
-}
 
 // Khởi tạo Client
 const client = new Client({
@@ -187,7 +127,6 @@ async function ensureDir(dirPath) {
         await fs.access(dirPath);
     } catch {
         await fs.mkdir(dirPath, { recursive: true });
-        Logger.info(`Đã tạo thư mục: ${dirPath}`);
     }
 }
 
@@ -195,10 +134,9 @@ async function loadConfig(fileName, defaultData = {}) {
     try {
         const filePath = path.join(configPath, fileName);
         const data = await fs.readFile(filePath, 'utf8');
-        Logger.info(`Đã tải config: ${fileName}`);
         return JSON.parse(data);
     } catch (error) {
-        Logger.info(`Tạo file config mới: ${fileName}`, defaultData);
+        console.log(`📁 Tạo file config mới: ${fileName}`);
         await saveConfig(fileName, defaultData);
         return defaultData;
     }
@@ -208,10 +146,9 @@ async function loadData(fileName, defaultData = {}) {
     try {
         const filePath = path.join(dataPath, fileName);
         const data = await fs.readFile(filePath, 'utf8');
-        Logger.info(`Đã tải data: ${fileName}`);
         return JSON.parse(data);
     } catch (error) {
-        Logger.info(`Tạo file data mới: ${fileName}`, defaultData);
+        console.log(`📁 Tạo file data mới: ${fileName}`);
         await saveData(fileName, defaultData);
         return defaultData;
     }
@@ -221,14 +158,12 @@ async function saveConfig(fileName, data) {
     await ensureDir(configPath);
     const filePath = path.join(configPath, fileName);
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-    Logger.info(`Đã lưu config: ${fileName}`);
 }
 
 async function saveData(fileName, data) {
     await ensureDir(dataPath);
     const filePath = path.join(dataPath, fileName);
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
-    Logger.info(`Đã lưu data: ${fileName}`);
 }
 
 // ==================== HỆ THỐNG ÂM NHẠC ====================
@@ -261,14 +196,11 @@ async function playSong(guildId) {
                 if (queue.textChannel) {
                     const embed = createEmbed('success', '🎵 Kết thúc hàng chờ', 
                         'Tất cả bài hát trong hàng chờ đã được phát xong!');
-                    queue.textChannel.send({ embeds: [embed] }).catch(error => {
-                        Logger.error('Lỗi gửi tin nhắn kết thúc hàng chờ:', error);
-                    });
+                    queue.textChannel.send({ embeds: [embed] }).catch(console.error);
                 }
                 queue.connection.destroy();
             }
             musicQueues.delete(guildId);
-            Logger.music(`Đã xóa hàng chờ nhạc cho guild: ${guildId}`);
             return;
         }
     }
@@ -289,10 +221,10 @@ async function playSong(guildId) {
                     discordPlayerCompatibility: true
                 });
             } catch (playDlError) {
-                Logger.error('Lỗi play-dl:', playDlError?.message || playDlError);
+                console.error('❌ Lỗi play-dl:', playDlError?.message || playDlError);
 
                 try {
-                    Logger.debug('Fallback sang ytdl-core để phát:', song.url);
+                    console.log('🔄 Fallback sang ytdl-core để phát:', song.url);
                     const ytStream = ytdl(song.url, {
                         filter: 'audioonly',
                         quality: 'highestaudio',
@@ -303,7 +235,7 @@ async function playSong(guildId) {
                         type: 'unknown'
                     };
                 } catch (ytdlErr) {
-                    Logger.error('Lỗi ytdl-core fallback:', ytdlErr?.message || ytdlErr);
+                    console.error('❌ Lỗi ytdl-core fallback:', ytdlErr?.message || ytdlErr);
                     throw playDlError;
                 }
             }
@@ -329,16 +261,8 @@ async function playSong(guildId) {
                         { name: '📈 Tiến độ', value: progressBar, inline: false }
                     ]);
                     
-                    queue.textChannel.send({ embeds: [embed] }).catch(error => {
-                        Logger.error('Lỗi gửi embed bài hát:', error);
-                    });
+                    queue.textChannel.send({ embeds: [embed] }).catch(console.error);
                 }
-
-                Logger.music(`Đang phát: ${song.title}`, {
-                    guild: guildId,
-                    position: queue.currentIndex + 1,
-                    total: queue.songs.length
-                });
 
                 queue.player.once(AudioPlayerStatus.Idle, () => {
                     setTimeout(() => {
@@ -350,7 +274,7 @@ async function playSong(guildId) {
                 });
 
                 queue.player.once('error', (error) => {
-                    Logger.error('Lỗi player:', error);
+                    console.error('❌ Lỗi player:', error);
                     if (queue.textChannel) {
                         const embed = createEmbed('error', '❌ Lỗi phát nhạc', 
                             'Có lỗi xảy ra khi phát nhạc! Đang thử lại...');
@@ -362,7 +286,7 @@ async function playSong(guildId) {
                 break;
             }
         } catch (error) {
-            Logger.error(`Lỗi phát nhạc (Lần thử ${retryCount + 1}/${maxRetries}):`, error);
+            console.error(`❌ Lỗi phát nhạc (Lần thử ${retryCount + 1}/${maxRetries}):`, error);
             retryCount++;
             
             if (retryCount >= maxRetries) {
@@ -539,12 +463,65 @@ function createScheduleEmbed(type, customDescription = null) {
     return embed;
 }
 
-// ==================== XỬ LÝ SỰ KIỆN CHÍNH (ĐÃ SỬA LỖI TRÙNG LẶP) ====================
+// ==================== HỆ THỐNG GỬI TIN NHẮN TỰ ĐỘNG ====================
+
+async function setupScheduledMessages() {
+    try {
+        const botConfig = await loadConfig('botConfig.json');
+
+        if (!botConfig.scheduleChannel) {
+            console.log('⏰ Chưa cấu hình channel tin nhắn tự động');
+            return;
+        }
+
+        // Kiểm tra nếu schedule bị tắt
+        if (botConfig.scheduleEnabled === false) {
+            console.log('⏰ Tin nhắn tự động đã bị tắt');
+            return;
+        }
+
+        const scheduleTimes = [
+            { time: '0 8 * * *', type: 'morning' },
+            { time: '0 12 * * *', type: 'noon' },
+            { time: '30 17 * * *', type: 'afternoon' },
+            { time: '0 20 * * *', type: 'evening' },
+            { time: '0 22 * * *', type: 'night' }
+        ];
+
+        scheduleTimes.forEach(({ time, type }) => {
+            cron.schedule(time, async () => {
+                try {
+                    const channel = client.channels.cache.get(botConfig.scheduleChannel);
+                    if (!channel) {
+                        console.log(`❌ Không tìm thấy channel: ${botConfig.scheduleChannel}`);
+                        return;
+                    }
+
+                    const embed = createScheduleEmbed(type);
+                    if (embed) {
+                        await channel.send({ embeds: [embed] });
+                        console.log(`✅ Đã gửi tin nhắn tự động: ${scheduleTemplates[type].title}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Lỗi gửi tin nhắn tự động ${type}:`, error);
+                }
+            }, {
+                timezone: 'Asia/Ho_Chi_Minh'
+            });
+        });
+
+        console.log('✅ Đã thiết lập hệ thống tin nhắn tự động');
+    } catch (error) {
+        console.error('❌ Lỗi thiết lập tin nhắn tự động:', error);
+    }
+}
+
+// ==================== XỬ LÝ SỰ KIỆN CHÍNH ====================
 
 client.on('ready', async () => {
-    Logger.success(`${client.user.tag} đã sẵn sàng!`);
-    Logger.info(`Đang phục vụ ${client.guilds.cache.size} server`);
-    Logger.info(`Tổng số ${client.users.cache.size} người dùng`);
+    console.log(`✅ ${client.user.tag} đã sẵn sàng!`);
+    console.log(`📊 Đang phục vụ ${client.guilds.cache.size} server`);
+    console.log(`👥 Tổng số ${client.users.cache.size} người dùng`);
 
     // Thiết lập trạng thái
     client.user.setPresence({
@@ -562,35 +539,20 @@ client.on('ready', async () => {
     setInterval(checkBirthdays, 60 * 60 * 1000);
     checkBirthdays();
 
-    Logger.success('Bot đã khởi động thành công!');
-    
-    // Log thông tin chi tiết
-    Logger.info('=== THÔNG TIN BOT ===', {
-        servers: client.guilds.cache.size,
-        users: client.users.cache.size,
-        channels: client.channels.cache.size,
-        uptime: formatUptime(process.uptime()),
-        memory: `${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)}MB`
-    });
+    console.log('🚀 Bot đã khởi động thành công!');
 });
 
-// SỰ KIỆN CHÀO MỪNG THÀNH VIÊN MỚI
+// ==================== SỰ KIỆN CHÀO MỪNG THÀNH VIÊN MỚI (ĐÃ CẬP NHẬT) ====================
 client.on('guildMemberAdd', async (member) => {
-    Logger.event(`Thành viên mới: ${member.user.tag} (${member.id}) trong ${member.guild.name}`);
-    
     try {
         const welcomeConfig = await loadConfig('welcomeConfig.json');
         
         if (!welcomeConfig.welcomeChannel) {
-            Logger.warn(`Chưa cấu hình welcome channel trong ${member.guild.name}`);
             return;
         }
 
         const channel = member.guild.channels.cache.get(welcomeConfig.welcomeChannel);
-        if (!channel) {
-            Logger.error(`Không tìm thấy welcome channel ${welcomeConfig.welcomeChannel} trong ${member.guild.name}`);
-            return;
-        }
+        if (!channel) return;
 
         // Chọn ngẫu nhiên một tin nhắn chào mừng
         const randomWelcome = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
@@ -599,6 +561,11 @@ client.on('guildMemberAdd', async (member) => {
         const welcomeDescription = randomWelcome.description
             .replace('{user}', member.toString())
             .replace('{server}', member.guild.name);
+            
+        const welcomeContent = randomWelcome.content
+            .replace('{user}', member.toString())
+            .replace('{server}', member.guild.name)
+            .replace('{memberCount}', member.guild.memberCount.toString());
 
         const embed = new EmbedBuilder()
             .setColor(randomWelcome.color)
@@ -636,40 +603,29 @@ client.on('guildMemberAdd', async (member) => {
             embeds: [embed] 
         });
 
-        Logger.success(`Đã chào mừng thành viên ${member.user.tag} trong ${channel.name}`);
-
         // Thêm role chào mừng
         if (welcomeConfig.welcomeRole) {
             const role = member.guild.roles.cache.get(welcomeConfig.welcomeRole);
             if (role) {
-                await member.roles.add(role).catch(error => {
-                    Logger.error(`Không thể thêm role cho ${member.user.tag}:`, error);
-                });
-                Logger.success(`Đã thêm role ${role.name} cho ${member.user.tag}`);
+                await member.roles.add(role).catch(console.error);
             }
         }
     } catch (error) {
-        Logger.error(`Lỗi chào mừng thành viên mới ${member.user.tag}:`, error);
+        console.error('❌ Lỗi chào mừng thành viên mới:', error);
     }
 });
 
-// SỰ KIỆN TẠM BIỆT THÀNH VIÊN
+// ==================== SỰ KIỆN TẠM BIỆT THÀNH VIÊN (ĐÃ CẬP NHẬT) ====================
 client.on('guildMemberRemove', async (member) => {
-    Logger.event(`Thành viên rời đi: ${member.user.tag} (${member.id}) từ ${member.guild.name}`);
-    
     try {
         const welcomeConfig = await loadConfig('welcomeConfig.json');
         
         if (!welcomeConfig.goodbyeChannel) {
-            Logger.warn(`Chưa cấu hình goodbye channel trong ${member.guild.name}`);
             return;
         }
 
         const channel = member.guild.channels.cache.get(welcomeConfig.goodbyeChannel);
-        if (!channel) {
-            Logger.error(`Không tìm thấy goodbye channel ${welcomeConfig.goodbyeChannel} trong ${member.guild.name}`);
-            return;
-        }
+        if (!channel) return;
 
         // Chọn ngẫu nhiên một tin nhắn tạm biệt
         const randomGoodbye = goodbyeMessages[Math.floor(Math.random() * goodbyeMessages.length)];
@@ -710,25 +666,18 @@ client.on('guildMemberRemove', async (member) => {
         }
 
         await channel.send({ embeds: [embed] });
-        Logger.success(`Đã gửi tin nhắn tạm biệt cho ${member.user.tag} trong ${channel.name}`);
     } catch (error) {
-        Logger.error(`Lỗi gửi tin nhắn tạm biệt cho ${member.user.tag}:`, error);
+        console.error('❌ Lỗi gửi tin nhắn tạm biệt:', error);
     }
 });
 
-// ==================== XỬ LÝ LỆNH DUY NHẤT (ĐÃ GỘP TẤT CẢ LỆNH) ====================
+// ==================== XỬ LÝ LỆNH ====================
 
 client.on('messageCreate', async (message) => {
-    // Bỏ qua tin nhắn từ bot khác
     if (message.author.bot) return;
-
-    const prefixConfig = await loadConfig('prefix.json', { prefix: "$" });
-    const prefix = prefixConfig.prefix;
 
     // Xử lý tin nhắn DM
     if (message.channel.type === 1) {
-        Logger.command(`DM từ ${message.author.tag}: ${message.content}`);
-        
         try {
             const botConfig = await loadConfig('botConfig.json');
             
@@ -749,7 +698,6 @@ client.on('messageCreate', async (message) => {
                     );
 
                 await message.reply({ embeds: [embed] });
-                Logger.info(`Đã phản hồi DM từ ${message.author.tag}`);
             }
 
             // Log DM
@@ -761,35 +709,25 @@ client.on('messageCreate', async (message) => {
                         .setThumbnail(message.author.displayAvatarURL());
 
                     await logChannel.send({ embeds: [embed] });
-                    Logger.info(`Đã log DM từ ${message.author.tag} đến kênh ${logChannel.name}`);
                 }
             }
         } catch (error) {
-            Logger.error(`Lỗi xử lý DM từ ${message.author.tag}:`, error);
+            console.error('❌ Lỗi xử lý DM:', error);
         }
         return;
     }
 
     // Xử lý lệnh trong server
+    const prefixConfig = await loadConfig('prefix.json', { prefix: "$" });
+    const prefix = prefixConfig.prefix;
+
     if (!message.content.startsWith(prefix)) return;
 
     const args = message.content.slice(prefix.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // Log lệnh được thực thi
-    Logger.command(`Lệnh từ ${message.author.tag} trong #${message.channel.name} (${message.guild.name}): ${message.content}`, {
-        user: message.author.tag,
-        userId: message.author.id,
-        guild: message.guild.name,
-        channel: message.channel.name,
-        command: command,
-        args: args
-    });
-
     try {
-        // ==================== TẤT CẢ CÁC LỆNH ĐƯỢC GỘP Ở ĐÂY ====================
-        
-        // LỆNH THÔNG TIN
+        // ==================== LỆNH THÔNG TIN ====================
         if (command === 'ping') {
             const processingEmbed = createEmbed('info', '⏳ Đang xử lý...', 'Đang tính toán độ trễ...');
             const msg = await message.reply({ embeds: [processingEmbed] });
@@ -887,7 +825,7 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [embed] });
         }
 
-        // LỆNH CẤU HÌNH
+        // ==================== LỆNH CẤU HÌNH CHANNEL (ĐÃ CẬP NHẬT) ====================
         if (command === 'setwelcome') {
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
@@ -928,13 +866,9 @@ client.on('messageCreate', async (message) => {
                     );
 
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Thiết lập welcome bởi ${message.author.tag}`, {
-                    channel: channel?.name,
-                    message: welcomeMessage
-                });
 
             } catch (error) {
-                Logger.error(`Lỗi thiết lập welcome bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi thiết lập welcome:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể lưu cấu hình! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
@@ -974,13 +908,9 @@ client.on('messageCreate', async (message) => {
                 const embed = createEmbed('success', '✅ Đã thiết lập kênh tạm biệt', 
                     `Đã đặt kênh tạm biệt thành: ${channel.toString()}\n\n**Tin nhắn mẫu:**\n${goodbyeMessage.replace('{user}', message.author.tag).replace('{server}', message.guild.name)}`);
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Thiết lập goodbye bởi ${message.author.tag}`, {
-                    channel: channel?.name,
-                    message: goodbyeMessage
-                });
 
             } catch (error) {
-                Logger.error(`Lỗi thiết lập goodbye bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi thiết lập goodbye:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể lưu cấu hình! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
@@ -1008,7 +938,6 @@ client.on('messageCreate', async (message) => {
             const embed = createEmbed('success', '✅ Đã thiết lập role chào mừng', 
                 `Đã đặt role chào mừng thành: ${role.toString()}\n\nThành viên mới sẽ tự động nhận role này khi tham gia server.`);
             await message.reply({ embeds: [embed] });
-            Logger.command(`Thiết lập welcome role bởi ${message.author.tag}: ${role.name}`);
         }
 
         if (command === 'setdmlog') {
@@ -1032,9 +961,9 @@ client.on('messageCreate', async (message) => {
             const embed = createEmbed('success', '✅ Đã thiết lập kênh log DM', 
                 `Đã đặt kênh log tin nhắn DM thành: ${channel.toString()}\n\nTất cả tin nhắn DM gửi cho bot sẽ được log tại đây.`);
             await message.reply({ embeds: [embed] });
-            Logger.command(`Thiết lập DM log channel bởi ${message.author.tag}: ${channel.name}`);
         }
 
+        // ==================== LỆNH SETUP SCHEDULE CHANNEL (ĐÃ SỬA) ====================
         if (command === 'setschedulechannel' || command === 'setmsgchannel') {
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
@@ -1072,9 +1001,6 @@ client.on('messageCreate', async (message) => {
                     .setFooter({ text: 'Tin nhắn tự động sẽ bắt đầu hoạt động từ ngày mai' });
 
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Thiết lập schedule channel bởi ${message.author.tag}`, {
-                    channel: channel?.name
-                });
 
                 // Test gửi tin nhắn mẫu
                 const testEmbed = createScheduleEmbed('morning');
@@ -1086,14 +1012,14 @@ client.on('messageCreate', async (message) => {
                 }
 
             } catch (error) {
-                Logger.error(`Lỗi thiết lập schedule channel bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi thiết lập schedule channel:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể lưu cấu hình! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
             }
         }
 
-        // LỆNH XEM THÔNG TIN CẤU HÌNH
+        // ==================== LỆNH XEM THÔNG TIN CẤU HÌNH (MỚI) ====================
         if (command === 'channelinfo' || command === 'configinfo') {
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
@@ -1186,17 +1112,16 @@ client.on('messageCreate', async (message) => {
                 }
 
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Xem config info bởi ${message.author.tag}`);
 
             } catch (error) {
-                Logger.error(`Lỗi lệnh channelinfo bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi lệnh channelinfo:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể tải thông tin cấu hình! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
             }
         }
 
-        // LỆNH KIỂM TRA SCHEDULE
+        // ==================== LỆNH KIỂM TRA SCHEDULE (MỚI) ====================
         if (command === 'scheduleinfo' || command === 'checkschedule') {
             try {
                 const botConfig = await loadConfig('botConfig.json', {});
@@ -1234,17 +1159,16 @@ client.on('messageCreate', async (message) => {
                     .setFooter({ text: 'Sử dụng testschedule [loại] để xem mẫu tin nhắn' });
 
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Xem schedule info bởi ${message.author.tag}`);
 
             } catch (error) {
-                Logger.error(`Lỗi lệnh scheduleinfo bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi lệnh scheduleinfo:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể tải thông tin lịch trình! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
             }
         }
 
-        // LỆNH BẬT/TẮT TIN NHẮN TỰ ĐỘNG
+        // ==================== LỆNH BẬT/TẮT TIN NHẮN TỰ ĐỘNG (MỚI) ====================
         if (command === 'toggleschedule' || command === 'toggleauto') {
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
@@ -1266,17 +1190,18 @@ client.on('messageCreate', async (message) => {
                     );
 
                 await message.reply({ embeds: [embed] });
-                Logger.command(`Toggle schedule bởi ${message.author.tag}: ${status}`);
 
             } catch (error) {
-                Logger.error(`Lỗi toggle schedule bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi toggle schedule:', error);
                 const embed = createEmbed('error', '❌ Lỗi hệ thống', 
                     'Không thể thay đổi cài đặt! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
             }
         }
 
-        // LỆNH QUẢN LÝ WELCOME MỚI
+        // ==================== LỆNH QUẢN LÝ WELCOME MỚI ====================
+
+        // Lệnh xem tin nhắn mẫu
         if (command === 'welcometemplates' || command === 'wtemplates') {
             const embed = new EmbedBuilder()
                 .setColor(0x5865F2)
@@ -1292,9 +1217,9 @@ client.on('messageCreate', async (message) => {
                 .setFooter({ text: 'Tin nhắn sẽ được chọn ngẫu nhiên khi có thành viên mới' });
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Xem welcome templates bởi ${message.author.tag}`);
         }
 
+        // Lệnh xem tin nhắn tạm biệt mẫu
         if (command === 'goodbyetemplates' || command === 'gtemplates') {
             const embed = new EmbedBuilder()
                 .setColor(0xED4245)
@@ -1310,12 +1235,10 @@ client.on('messageCreate', async (message) => {
                 .setFooter({ text: 'Tin nhắn sẽ được chọn ngẫu nhiên khi có thành viên rời đi' });
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Xem goodbye templates bởi ${message.author.tag}`);
         }
 
+        // Lệnh test tin nhắn chào mừng
         if (command === 'testwelcome') {
-            Logger.command(`Test welcome bởi ${message.author.tag}`);
-            
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
                     'Bạn cần quyền **Administrator** để sử dụng lệnh này!');
@@ -1347,9 +1270,8 @@ client.on('messageCreate', async (message) => {
             });
         }
 
+        // Lệnh test tin nhắn tạm biệt
         if (command === 'testgoodbye') {
-            Logger.command(`Test goodbye bởi ${message.author.tag}`);
-            
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
                     'Bạn cần quyền **Administrator** để sử dụng lệnh này!');
@@ -1378,7 +1300,7 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [embed] });
         }
 
-        // LỆNH TESTSCHEDULENOW VÀ TESTSEND
+        // ==================== LỆNH TESTSCHEDULENOW VÀ TESTSEND ====================
         if (command === 'testschedulenow' || command === 'testsend') {
             if (!message.member.permissions.has('Administrator')) {
                 const embed = createEmbed('error', '❌ Thiếu quyền', 
@@ -1416,10 +1338,9 @@ client.on('messageCreate', async (message) => {
                     const successEmbed = createEmbed('success', '✅ Đã gửi tin nhắn test', 
                         `Đã gửi tin nhắn **${type}** đến ${channel.toString()}`);
                     await message.reply({ embeds: [successEmbed] });
-                    Logger.command(`Test schedule now bởi ${message.author.tag}: ${type}`);
                 }
             } catch (error) {
-                Logger.error(`Lỗi gửi tin nhắn test bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi gửi tin nhắn test:', error);
                 const embed = createEmbed('error', '❌ Lỗi gửi tin nhắn', 
                     `Không thể gửi tin nhắn: ${error.message}`);
                 await message.reply({ embeds: [embed] });
@@ -1428,8 +1349,6 @@ client.on('messageCreate', async (message) => {
 
         // Lệnh test tin nhắn với embed mới
         if (command === 'testschedule' || command === 'testmsg') {
-            Logger.command(`Test schedule bởi ${message.author.tag}: ${args[0]}`);
-            
             const type = args[0]?.toLowerCase();
             const validTypes = ['morning', 'noon', 'afternoon', 'evening', 'night'];
 
@@ -1499,7 +1418,6 @@ client.on('messageCreate', async (message) => {
                 .setFooter({ text: 'Sử dụng testschedule [loại] để xem template đầy đủ' });
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Xem schedule templates bởi ${message.author.tag}`);
         }
 
         // Lệnh gửi tin nhắn thử tất cả khung giờ
@@ -1530,7 +1448,6 @@ client.on('messageCreate', async (message) => {
                 .setFooter({ text: 'Sử dụng testschedule [loại] để xem từng cái riêng' });
 
             await message.reply({ embeds: [summaryEmbed] });
-            Logger.command(`Test all schedules bởi ${message.author.tag}`);
         }
 
         // Lệnh custom tin nhắn với template
@@ -1575,13 +1492,10 @@ client.on('messageCreate', async (message) => {
             }
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Custom schedule bởi ${message.author.tag}: ${type}`);
         }
 
         // ==================== LỆNH ÂM NHẠC ====================
         if (command === 'play' || command === 'p') {
-            Logger.music(`Play command bởi ${message.author.tag}: ${args.join(' ')}`);
-            
             if (!args[0]) {
                 const embed = createEmbed('error', '❌ Thiếu thông tin', 
                     'Vui lòng cung cấp URL YouTube hoặc tên bài hát!\n\n**Ví dụ:**\n`$play https://youtube.com/...`\n`$play Shape of You`');
@@ -1655,7 +1569,7 @@ client.on('messageCreate', async (message) => {
                 }
 
             } catch (error) {
-                Logger.error(`Lỗi play command từ ${message.author.tag}:`, error);
+                console.error('❌ Lỗi play command:', error);
                 const embed = createEmbed('error', '❌ Lỗi phát nhạc', 
                     'Không thể phát bài hát này! Vui lòng thử lại với URL hoặc từ khóa khác.');
                 await loadingMsg.edit({ embeds: [embed] });
@@ -1663,8 +1577,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'stop') {
-            Logger.music(`Stop command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             if (queue.connection) {
                 queue.connection.destroy();
@@ -1681,8 +1593,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'pause') {
-            Logger.music(`Pause command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             if (queue.player && queue.isPlaying && !queue.isPaused) {
                 queue.player.pause();
@@ -1699,8 +1609,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'resume') {
-            Logger.music(`Resume command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             if (queue.player && queue.isPaused) {
                 queue.player.unpause();
@@ -1717,8 +1625,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'skip') {
-            Logger.music(`Skip command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             if (queue.player && queue.isPlaying) {
                 const skippedSong = queue.songs[queue.currentIndex];
@@ -1735,8 +1641,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'queue' || command === 'q') {
-            Logger.music(`Queue command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             
             if (queue.songs.length === 0) {
@@ -1774,8 +1678,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'nowplaying' || command === 'np') {
-            Logger.music(`Now playing command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             
             if (!queue.isPlaying || !queue.songs[queue.currentIndex]) {
@@ -1798,8 +1700,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'volume' || command === 'vol') {
-            Logger.music(`Volume command bởi ${message.author.tag}: ${args[0]}`);
-            
             const queue = getQueue(message.guild.id);
             const volume = parseInt(args[0]);
 
@@ -1817,8 +1717,6 @@ client.on('messageCreate', async (message) => {
         }
 
         if (command === 'loop') {
-            Logger.music(`Loop command bởi ${message.author.tag}`);
-            
             const queue = getQueue(message.guild.id);
             queue.loop = !queue.loop;
             
@@ -1847,7 +1745,6 @@ client.on('messageCreate', async (message) => {
             const embed = createEmbed('success', '✅ Đã thay đổi prefix', 
                 `Prefix mới: \`${newPrefix}\`\n\n**Lưu ý:** Prefix chỉ thay đổi trên server này.`);
             await message.reply({ embeds: [embed] });
-            Logger.command(`Đổi prefix bởi ${message.author.tag}: ${newPrefix}`);
         }
 
         if (command === 'userinfo') {
@@ -1867,7 +1764,6 @@ client.on('messageCreate', async (message) => {
                 .setImage(target.displayAvatarURL({ size: 1024 }));
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Userinfo command bởi ${message.author.tag}`);
         }
 
         if (command === 'serverinfo') {
@@ -1889,7 +1785,6 @@ client.on('messageCreate', async (message) => {
                 .setImage(guild.bannerURL({ size: 1024 }) || 'https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/server-banner.png');
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Serverinfo command bởi ${message.author.tag}`);
         }
 
         if (command === 'avatar' || command === 'av') {
@@ -1902,7 +1797,6 @@ client.on('messageCreate', async (message) => {
                 );
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Avatar command bởi ${message.author.tag}`);
         }
 
         // ==================== LỆNH GIẢI TRÍ ====================
@@ -1938,7 +1832,6 @@ client.on('messageCreate', async (message) => {
             for (let i = 0; i < choices.length; i++) {
                 await pollMessage.react(emojis[i]);
             }
-            Logger.command(`Poll command bởi ${message.author.tag}: ${question}`);
         }
 
         // ==================== LỆNH TIỆN ÍCH ====================
@@ -1968,9 +1861,7 @@ client.on('messageCreate', async (message) => {
                     .setThumbnail('https://cdn.discordapp.com/emojis/1107540430879342694.webp');
 
                 await loadingMsg.edit({ embeds: [embed] });
-                Logger.command(`Translate command bởi ${message.author.tag}: ${targetLang}`);
             } catch (error) {
-                Logger.error(`Lỗi translate command bởi ${message.author.tag}:`, error);
                 const embed = createEmbed('error', '❌ Lỗi dịch thuật', 
                     'Không thể dịch văn bản! Vui lòng thử lại.');
                 await loadingMsg.edit({ embeds: [embed] });
@@ -1999,9 +1890,8 @@ client.on('messageCreate', async (message) => {
                 const reply = await message.channel.send({ embeds: [embed] });
                 
                 setTimeout(() => reply.delete(), 5000);
-                Logger.command(`Clear command bởi ${message.author.tag}: ${amount} tin nhắn`);
             } catch (error) {
-                Logger.error(`Lỗi clear command bởi ${message.author.tag}:`, error);
+                console.error('❌ Lỗi xóa tin nhắn:', error);
                 const embed = createEmbed('error', '❌ Lỗi dọn dẹp', 
                     'Không thể xóa tin nhắn! Có thể tin nhắn quá cũ (hơn 14 ngày).');
                 await message.reply({ embeds: [embed] });
@@ -2034,111 +1924,17 @@ client.on('messageCreate', async (message) => {
                 .setThumbnail('https://cdn.discordapp.com/emojis/1107540430879342694.webp');
 
             await message.reply({ embeds: [embed] });
-            Logger.command(`Set birthday bởi ${message.author.tag}: ${birthday}`);
-        }
-
-        // ==================== CÁC LỆNH BỔ SUNG KHÁC ====================
-
-        // Lệnh thông tin uptime
-        if (command === 'uptime') {
-            const embed = createEmbed('info', '⏰ Thời gian hoạt động', 
-                `Bot đã hoạt động được: **${formatUptime(process.uptime())}**`)
-                .addFields(
-                    { name: '🔄 Khởi động lúc', value: `<t:${Math.floor((Date.now() - process.uptime() * 1000) / 1000)}:R>`, inline: true },
-                    { name: '📊 Server', value: `\`${client.guilds.cache.size}\``, inline: true },
-                    { name: '👥 Người dùng', value: `\`${client.users.cache.size}\``, inline: true }
-                );
-            await message.reply({ embeds: [embed] });
-            Logger.command(`Uptime command bởi ${message.author.tag}`);
-        }
-
-        // Lệnh thông tin bot
-        if (command === 'botinfo') {
-            const embed = createEmbed('info', '🤖 Thông tin LeiLaBOT', 
-                'LeiLaBOT - Discord Bot đa năng với hơn 50+ tính năng hữu ích!')
-                .addFields(
-                    { name: '👑 Developer', value: 'CuongGatsBy94', inline: true },
-                    { name: '📚 Thư viện', value: 'Discord.js v14', inline: true },
-                    { name: '🎵 Tính năng chính', value: 'Âm nhạc, Moderation, Welcome, Auto Messages', inline: false },
-                    { name: '🌐 Website', value: '[leilabot.railway.app](https://leilabot.railway.app)', inline: true },
-                    { name: '📖 Documentation', value: '[Docs](https://leilabot.railway.app/docs)', inline: true },
-                    { name: '🆘 Support', value: '[Server](https://discord.gg/9CFJxJUBj7)', inline: true }
-                )
-                .setThumbnail(client.user.displayAvatarURL({ size: 256 }));
-
-            await message.reply({ embeds: [embed] });
-            Logger.command(`Botinfo command bởi ${message.author.tag}`);
         }
 
     } catch (error) {
-        Logger.error(`Lỗi xử lý lệnh ${command} từ ${message.author.tag}:`, error);
+        console.error('❌ Lỗi xử lý lệnh:', error);
         const embed = createEmbed('error', '❌ Lỗi hệ thống', 
             'Có lỗi xảy ra khi thực hiện lệnh! Vui lòng thử lại sau.');
         await message.reply({ embeds: [embed] });
     }
 });
 
-// ==================== CẬP NHẬT HỆ THỐNG TIN NHẮN TỰ ĐỘNG VỚI LOGGING ====================
-
-async function setupScheduledMessages() {
-    try {
-        const botConfig = await loadConfig('botConfig.json');
-
-        if (!botConfig.scheduleChannel) {
-            Logger.warn('Chưa cấu hình channel tin nhắn tự động');
-            return;
-        }
-
-        // Kiểm tra nếu schedule bị tắt
-        if (botConfig.scheduleEnabled === false) {
-            Logger.info('Tin nhắn tự động đã bị tắt');
-            return;
-        }
-
-        const scheduleTimes = [
-            { time: '0 8 * * *', type: 'morning' },
-            { time: '0 12 * * *', type: 'noon' },
-            { time: '30 17 * * *', type: 'afternoon' },
-            { time: '0 20 * * *', type: 'evening' },
-            { time: '0 22 * * *', type: 'night' }
-        ];
-
-        scheduleTimes.forEach(({ time, type }) => {
-            cron.schedule(time, async () => {
-                try {
-                    const channel = client.channels.cache.get(botConfig.scheduleChannel);
-                    if (!channel) {
-                        Logger.error(`Không tìm thấy channel: ${botConfig.scheduleChannel}`);
-                        return;
-                    }
-
-                    const embed = createScheduleEmbed(type);
-                    if (embed) {
-                        await channel.send({ embeds: [embed] });
-                        Logger.success(`Đã gửi tin nhắn tự động: ${scheduleTemplates[type].title}`, {
-                            channel: channel.name,
-                            type: type,
-                            time: new Date().toLocaleString('vi-VN')
-                        });
-                    }
-                } catch (error) {
-                    Logger.error(`Lỗi gửi tin nhắn tự động ${type}:`, error);
-                }
-            }, {
-                timezone: 'Asia/Ho_Chi_Minh'
-            });
-        });
-
-        Logger.success('Đã thiết lập hệ thống tin nhắn tự động', {
-            channel: botConfig.scheduleChannel,
-            schedules: scheduleTimes.length
-        });
-    } catch (error) {
-        Logger.error('Lỗi thiết lập tin nhắn tự động:', error);
-    }
-}
-
-// ==================== CẬP NHẬT HỆ THỐNG SINH NHẬT VỚI LOGGING ====================
+// ==================== HỆ THỐNG SINH NHẬT ====================
 
 async function checkBirthdays() {
     try {
@@ -2146,18 +1942,10 @@ async function checkBirthdays() {
         const today = new Date();
         const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
-        Logger.info(`Kiểm tra sinh nhật: ${todayStr}`, {
-            totalUsers: Object.keys(birthdays).length
-        });
-
-        let birthdayCount = 0;
-
         for (const [userId, birthday] of Object.entries(birthdays)) {
             if (birthday === todayStr) {
                 const user = await client.users.fetch(userId).catch(() => null);
                 if (user) {
-                    birthdayCount++;
-                    
                     const embed = createEmbed('fun', '🎉 Chúc mừng sinh nhật!', 
                         `Chúc mừng sinh nhật ${user}! 🎂\n\nChúc bạn một ngày thật tuyệt vời với nhiều niềm vui và hạnh phúc! 🎈🎁`)
                         .setThumbnail(user.displayAvatarURL())
@@ -2176,22 +1964,15 @@ async function checkBirthdays() {
                                 generalChannel.send({ 
                                     content: `🎉 ${member.toString()}`, 
                                     embeds: [embed] 
-                                }).catch(error => {
-                                    Logger.error(`Lỗi gửi tin nhắn sinh nhật trong ${guild.name}:`, error);
-                                });
-                                Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} trong ${guild.name}`);
+                                }).catch(console.error);
                             }
                         }
                     });
                 }
             }
         }
-
-        if (birthdayCount > 0) {
-            Logger.success(`Đã chúc mừng sinh nhật ${birthdayCount} người dùng`);
-        }
     } catch (error) {
-        Logger.error('Lỗi kiểm tra sinh nhật:', error);
+        console.error('❌ Lỗi kiểm tra sinh nhật:', error);
     }
 }
 
@@ -2212,28 +1993,19 @@ function formatUptime(seconds) {
     return parts.join(' ');
 }
 
-// ==================== XỬ LÝ LỖI VỚI LOGGING ====================
+// ==================== XỬ LÝ LỖI ====================
 
-client.on('error', (error) => {
-    Logger.error('Lỗi Discord Client:', error);
-});
-
+client.on('error', console.error);
 process.on('unhandledRejection', (reason, promise) => {
-    Logger.error('Unhandled Rejection tại:', { promise, reason });
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
 });
 
-process.on('uncaughtException', (error) => {
-    Logger.error('Uncaught Exception:', error);
+// ==================== KHỞI CHẠY BOT ====================
+
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+    console.error('❌ Lỗi đăng nhập bot:', error);
     process.exit(1);
 });
-
-// ==================== KHỞI CHẠY BOT VỚI LOGGING ====================
-
-client.login(process.env.DISCORD_TOKEN)
-    .then(() => {
-        Logger.success('Bot đã đăng nhập thành công!');
-    })
-    .catch(error => {
-        Logger.error('Lỗi đăng nhập bot:', error);
-        process.exit(1);
-    });
