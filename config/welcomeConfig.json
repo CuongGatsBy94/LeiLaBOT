@@ -1,0 +1,6 @@
+{
+  "welcomeChannel": "1026661016760762409",
+  "welcomeMessage": "$setwelcome Chào mừng {user} đến với {server}! 🎊\nChúng tôi rất vui khi có bạn tham gia cộng đồng! Hãy giới thiệu đôi chút về bản thân nhé! 💫",
+  "goodbyeChannel": "1026662320388182086",
+  "goodbyeMessage": "🌅 KẾT THÚC HÀNH TRÌNH\n{user} đã kết thúc hành trình tại {server}...\nMọi cuộc gặp gỡ rồi sẽ có lúc chia ly. Chúc bạn tìm thấy nơi mình thuộc về! 🏞️"
+}
