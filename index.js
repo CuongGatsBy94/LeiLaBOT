@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-24 23:32:39
+ * @Last Modified time: 2025-10-24 23:49:36
  */
 
 require('dotenv').config();
@@ -840,7 +840,236 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [embed], components: [row] });
         }
 
-        // ... (Các lệnh khác giữ nguyên, đã được tối ưu hóa)
+        // LỆNH DEBUG VÀ QUẢN LÝ
+        if (command === 'debugconfig') {
+            const botConfig = await loadConfig('botConfig.json');
+            
+            const embed = createEmbed('info', '🔧 Debug Config')
+                .addFields(
+                    { name: '📁 Schedule Channel ID', value: `\`${botConfig.scheduleChannel}\``, inline: true },
+                    { name: '📝 DM Log Channel ID', value: `\`${botConfig.dmLogChannel}\``, inline: true },
+                    { name: '⚙️ Schedule Enabled', value: botConfig.scheduleEnabled !== false ? '✅' : '❌', inline: true }
+                )
+                .setFooter({ text: `Config được load lúc: ${new Date().toLocaleString('vi-VN')}` });
+
+            await message.reply({ embeds: [embed] });
+        }
+
+        if (command === 'reloadconfig') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const embed = createEmbed('success', '✅ Thành công', 'Đã reload config thành công!');
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã reload config bởi ${message.author.tag}`);
+        }
+
+        if (command === 'debugschedule') {
+            const botConfig = await loadConfig('botConfig.json');
+            
+            const embed = createEmbed('info', '🔧 Debug Schedule System')
+                .addFields(
+                    { name: '📁 Schedule Channel ID', value: `\`${botConfig.scheduleChannel}\``, inline: true },
+                    { name: '🔍 Channel Found', value: client.channels.cache.has(botConfig.scheduleChannel) ? '✅' : '❌', inline: true },
+                    { name: '⚙️ Schedule Enabled', value: botConfig.scheduleEnabled !== false ? '✅' : '❌', inline: true }
+                );
+
+            if (client.channels.cache.has(botConfig.scheduleChannel)) {
+                const channel = client.channels.cache.get(botConfig.scheduleChannel);
+                embed.addFields(
+                    { name: '📝 Channel Name', value: channel.name, inline: true },
+                    { name: '🏠 Guild', value: channel.guild.name, inline: true },
+                    { name: '🔐 Permissions', value: channel.permissionsFor(client.user).has('SendMessages') ? '✅ Có quyền' : '❌ Không có quyền', inline: true }
+                );
+            }
+
+            await message.reply({ embeds: [embed] });
+        }
+
+        if (command === 'testschedulenow') {
+            const type = args[0] || 'morning';
+            
+            if (!['morning', 'noon', 'afternoon', 'evening', 'night'].includes(type)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Loại schedule không hợp lệ. Các loại: morning, noon, afternoon, evening, night');
+                return message.reply({ embeds: [embed] });
+            }
+
+            try {
+                const botConfig = await loadConfig('botConfig.json');
+                
+                if (!botConfig.scheduleChannel) {
+                    const embed = createEmbed('error', '❌ Lỗi', 'Chưa cấu hình schedule channel!');
+                    return message.reply({ embeds: [embed] });
+                }
+
+                const channel = await client.channels.fetch(botConfig.scheduleChannel).catch(() => null);
+                if (!channel) {
+                    const embed = createEmbed('error', '❌ Lỗi', `Không tìm thấy kênh: ${botConfig.scheduleChannel}`);
+                    return message.reply({ embeds: [embed] });
+                }
+
+                const embed = createScheduleEmbed(type);
+                if (embed) {
+                    await channel.send({ 
+                        content: `🧪 **TEST SCHEDULE** - ${type.toUpperCase()}`,
+                        embeds: [embed] 
+                    });
+                    
+                    const successEmbed = createEmbed('success', '✅ Thành công', 
+                        `Đã gửi tin nhắn test schedule **${type}** đến kênh ${channel.toString()}`);
+                    await message.reply({ embeds: [successEmbed] });
+                    
+                    Logger.success(`Đã test schedule ${type} trong kênh ${channel.name}`);
+                }
+            } catch (error) {
+                Logger.error(`Lỗi test schedule ${type}:`, error);
+                const embed = createEmbed('error', '❌ Lỗi', `Lỗi khi test schedule: ${error.message}`);
+                await message.reply({ embeds: [embed] });
+            }
+        }
+
+        // LỆNH QUẢN LÝ SERVER
+        if (command === 'setschedulechannel') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[0]);
+            if (!channel) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng đề cập đến một kênh hợp lệ!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const botConfig = await loadConfig('botConfig.json');
+            botConfig.scheduleChannel = channel.id;
+            await saveConfig('botConfig.json', botConfig);
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã đặt kênh tin nhắn tự động thành ${channel.toString()}`);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã đặt schedule channel thành ${channel.name} bởi ${message.author.tag}`);
+        }
+
+        if (command === 'toggleschedule') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const botConfig = await loadConfig('botConfig.json');
+            botConfig.scheduleEnabled = !botConfig.scheduleEnabled;
+            await saveConfig('botConfig.json', botConfig);
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Tin nhắn tự động đã được ${botConfig.scheduleEnabled ? '**bật**' : '**tắt**'}`);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã ${botConfig.scheduleEnabled ? 'bật' : 'tắt'} schedule bởi ${message.author.tag}`);
+        }
+
+        if (command === 'scheduleinfo') {
+            const botConfig = await loadConfig('botConfig.json');
+            const channel = botConfig.scheduleChannel ? client.channels.cache.get(botConfig.scheduleChannel) : null;
+
+            let scheduleText = '';
+            const scheduleTimes = [
+                { time: '08:00', type: 'morning' },
+                { time: '12:00', type: 'noon' },
+                { time: '17:30', type: 'afternoon' },
+                { time: '20:00', type: 'evening' },
+                { time: '22:00', type: 'night' }
+            ];
+
+            scheduleTimes.forEach(({ time, type }) => {
+                const template = scheduleTemplates[type];
+                scheduleText += `**${time} - ${template.title.split(' - ')[0]}**\n${template.description}\n\n`;
+            });
+
+            const embed = createEmbed('info', '✅ THÔNG TIN TIN NHẮN TỰ ĐỘNG', 
+                `**Kênh tin nhắn tự động:** ${channel ? channel.toString() : 'Chưa cấu hình'}\n\n${scheduleText}`)
+                .addFields(
+                    { name: '🌐 Múi giờ', value: 'Asia/Ho_Chi_Minh (GMT+7)', inline: true },
+                    { name: '📊 Trạng thái', value: botConfig.scheduleEnabled !== false ? '✅ Đang hoạt động' : '❌ Đã tắt', inline: true },
+                    { name: '🎨 Định dạng', value: 'Embed', inline: true }
+                )
+                .setFooter({ text: 'Sử dụng testschedule [loại] để xem mẫu tin nhắn' });
+
+            await message.reply({ embeds: [embed] });
+        }
+
+        // LỆNH CHÀO MỪNG
+        if (command === 'testwelcome') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const welcomeConfig = await loadConfig('welcomeConfig.json');
+            if (!welcomeConfig.welcomeChannel) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Chưa cấu hình kênh chào mừng!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const channel = message.guild.channels.cache.get(welcomeConfig.welcomeChannel);
+            if (!channel) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Không tìm thấy kênh chào mừng!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const randomWelcome = welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)];
+            
+            const welcomeDescription = randomWelcome.description
+                .replace('{user}', message.author.toString())
+                .replace('{server}', message.guild.name);
+
+            const embed = new EmbedBuilder()
+                .setColor(randomWelcome.color)
+                .setTitle('🧪 TEST: ' + randomWelcome.title)
+                .setDescription(welcomeDescription)
+                .addFields(
+                    { name: '🎉 Thành viên thứ', value: `#${message.guild.memberCount}`, inline: true },
+                    { name: '📅 Tham gia vào', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                    { name: '🏠 Server', value: message.guild.name, inline: true }
+                )
+                .setThumbnail(message.author.displayAvatarURL({ size: 256 }))
+                .setImage(randomWelcome.image)
+                .setFooter({ 
+                    text: 'LeiLaBOT • Trao gửi yêu thương', 
+                    iconURL: client.user?.displayAvatarURL() 
+                })
+                .setTimestamp();
+
+            await channel.send({ 
+                content: `🎉 ${message.author.toString()} (TEST)`, 
+                embeds: [embed] 
+            });
+
+            const successEmbed = createEmbed('success', '✅ Thành công', 
+                `Đã gửi tin nhắn test chào mừng đến ${channel.toString()}`);
+            await message.reply({ embeds: [successEmbed] });
+        }
+
+        // LỆNH SETPREFIX
+        if (command === 'setprefix') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const newPrefix = args[0];
+            if (!newPrefix || newPrefix.length > 3) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Prefix phải có từ 1-3 ký tự!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            await saveConfig('prefix.json', { prefix: newPrefix });
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Prefix đã được đổi thành: \`${newPrefix}\``);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã đổi prefix thành ${newPrefix} bởi ${message.author.tag}`);
+        }
 
     } catch (error) {
         Logger.error(`Lỗi xử lý lệnh ${command} từ ${message.author.tag}:`, error);
@@ -863,7 +1092,7 @@ async function setupScheduledMessages() {
         ];
 
         scheduleTimes.forEach(({ time, type }) => {
-            cron.schedule(time, async () => { // THÊM async Ở ĐÂY
+            cron.schedule(time, async () => {
                 try {
                     // QUAN TRỌNG: Load config MỚI mỗi lần cron chạy
                     const botConfig = await loadConfig('botConfig.json');
@@ -970,58 +1199,6 @@ async function checkBirthdays() {
     } catch (error) {
         Logger.error('Lỗi kiểm tra sinh nhật:', error);
     }
-}
-// ==================== DEBUG CONFIG====================
-if (command === 'debugconfig') {
-    const botConfig = await loadConfig('botConfig.json');
-    
-    const embed = createEmbed('info', '🔧 Debug Config')
-        .addFields(
-            { name: '📁 Schedule Channel ID', value: `\`${botConfig.scheduleChannel}\``, inline: true },
-            { name: '📝 DM Log Channel ID', value: `\`${botConfig.dmLogChannel}\``, inline: true },
-            { name: '⚙️ Schedule Enabled', value: botConfig.scheduleEnabled !== false ? '✅' : '❌', inline: true }
-        )
-        .setFooter({ text: `Config được load lúc: ${new Date().toLocaleString('vi-VN')}` });
-
-    await message.reply({ embeds: [embed] });
-}
-
-// THÊM VÀO PHẦN LỆNH
-if (command === 'reloadconfig') {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
-        return message.reply({ embeds: [embed] });
-    }
-
-    // Xóa cache module để load lại config
-    delete require.cache[require.resolve('./config/botConfig.json')];
-    
-    const embed = createEmbed('success', '✅ Thành công', 'Đã reload config thành công!');
-    await message.reply({ embeds: [embed] });
-    Logger.info(`Đã reload config bởi ${message.author.tag}`);
-}
-// THÊM VÀO PHẦN LỆNH
-if (command === 'debugschedule') {
-    const botConfig = await loadConfig('botConfig.json');
-    
-    const embed = createEmbed('info', '🔧 Debug Schedule System')
-        .addFields(
-            { name: '📁 Schedule Channel ID', value: `\`${botConfig.scheduleChannel}\``, inline: true },
-            { name: '🔍 Channel Found', value: client.channels.cache.has(botConfig.scheduleChannel) ? '✅' : '❌', inline: true },
-            { name: '⚙️ Schedule Enabled', value: botConfig.scheduleEnabled !== false ? '✅' : '❌', inline: true }
-        );
-
-    // Hiển thị thông tin kênh nếu tìm thấy
-    if (client.channels.cache.has(botConfig.scheduleChannel)) {
-        const channel = client.channels.cache.get(botConfig.scheduleChannel);
-        embed.addFields(
-            { name: '📝 Channel Name', value: channel.name, inline: true },
-            { name: '🏠 Guild', value: channel.guild.name, inline: true },
-            { name: '🔐 Permissions', value: channel.permissionsFor(client.user).has('SendMessages') ? '✅ Có quyền' : '❌ Không có quyền', inline: true }
-        );
-    }
-
-    await message.reply({ embeds: [embed] });
 }
 
 // ==================== HÀM TIỆN ÍCH ====================
