@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-24 23:14:59
+ * @Last Modified time: 2025-10-24 23:32:39
  */
 
 require('dotenv').config();
@@ -863,13 +863,18 @@ async function setupScheduledMessages() {
         ];
 
         scheduleTimes.forEach(({ time, type }) => {
-            cron.schedule(time, async () => {
+            cron.schedule(time, async () => { // THÊM async Ở ĐÂY
                 try {
                     // QUAN TRỌNG: Load config MỚI mỗi lần cron chạy
                     const botConfig = await loadConfig('botConfig.json');
                     
                     if (!botConfig.scheduleChannel) {
                         Logger.error(`[Cron ${type}] Chưa cấu hình scheduleChannel`);
+                        return;
+                    }
+
+                    if (botConfig.scheduleEnabled === false) {
+                        Logger.info(`[Cron ${type}] Tin nhắn tự động đã bị tắt`);
                         return;
                     }
 
@@ -881,7 +886,7 @@ async function setupScheduledMessages() {
                     }
 
                     // Kiểm tra quyền
-                    if (!channel.permissionsFor(client.user).has(['SendMessages', 'ViewChannel'])) {
+                    if (!channel.permissionsFor(client.user)?.has(['SendMessages', 'ViewChannel'])) {
                         Logger.error(`[Cron ${type}] Không đủ quyền trong kênh: ${channel.name}`);
                         return;
                     }
@@ -995,6 +1000,30 @@ if (command === 'reloadconfig') {
     await message.reply({ embeds: [embed] });
     Logger.info(`Đã reload config bởi ${message.author.tag}`);
 }
+// THÊM VÀO PHẦN LỆNH
+if (command === 'debugschedule') {
+    const botConfig = await loadConfig('botConfig.json');
+    
+    const embed = createEmbed('info', '🔧 Debug Schedule System')
+        .addFields(
+            { name: '📁 Schedule Channel ID', value: `\`${botConfig.scheduleChannel}\``, inline: true },
+            { name: '🔍 Channel Found', value: client.channels.cache.has(botConfig.scheduleChannel) ? '✅' : '❌', inline: true },
+            { name: '⚙️ Schedule Enabled', value: botConfig.scheduleEnabled !== false ? '✅' : '❌', inline: true }
+        );
+
+    // Hiển thị thông tin kênh nếu tìm thấy
+    if (client.channels.cache.has(botConfig.scheduleChannel)) {
+        const channel = client.channels.cache.get(botConfig.scheduleChannel);
+        embed.addFields(
+            { name: '📝 Channel Name', value: channel.name, inline: true },
+            { name: '🏠 Guild', value: channel.guild.name, inline: true },
+            { name: '🔐 Permissions', value: channel.permissionsFor(client.user).has('SendMessages') ? '✅ Có quyền' : '❌ Không có quyền', inline: true }
+        );
+    }
+
+    await message.reply({ embeds: [embed] });
+}
+
 // ==================== HÀM TIỆN ÍCH ====================
 
 function formatUptime(seconds) {
