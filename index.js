@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-25 19:29:34
+ * @Last Modified time: 2025-10-26 03:05:39
  */
 
 require('dotenv').config();
@@ -541,6 +541,89 @@ function createScheduleEmbed(type, customDescription = null) {
     return embed;
 }
 
+// ==================== HỆ THỐNG SINH NHẬT - ĐÃ SỬA LỖI ====================
+
+// Biến để theo dõi đã gửi chúc mừng sinh nhật trong ngày
+let birthdayCache = {
+    lastCheck: null,
+    sentToday: new Set()
+};
+
+async function checkBirthdays() {
+    try {
+        const now = new Date();
+        const todayStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Reset cache nếu đã qua ngày mới
+        if (!birthdayCache.lastCheck || birthdayCache.lastCheck !== todayStr) {
+            birthdayCache.lastCheck = todayStr;
+            birthdayCache.sentToday.clear();
+            Logger.info(`Đã reset cache sinh nhật cho ngày ${todayStr}`);
+        }
+
+        const birthdays = await loadData('birthdays.json');
+        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
+
+        Logger.info(`Kiểm tra sinh nhật: ${todayStr}`, {
+            totalUsers: Object.keys(birthdays).length,
+            birthdayChannels: Object.keys(birthdayConfig).length,
+            sentToday: birthdayCache.sentToday.size
+        });
+
+        let birthdayCount = 0;
+
+        for (const [userId, birthday] of Object.entries(birthdays)) {
+            if (birthday === todayStr && !birthdayCache.sentToday.has(userId)) {
+                const user = await client.users.fetch(userId).catch(() => null);
+                if (user) {
+                    birthdayCount++;
+                    birthdayCache.sentToday.add(userId); // Đánh dấu đã gửi
+                    
+                    const embed = createEmbed('fun', '🎉 Chúc mừng sinh nhật!', 
+                        `Chúc mừng sinh nhật ${user}! 🎂\n\nChúc bạn một ngày thật tuyệt vời với nhiều niềm vui và hạnh phúc! 🎈🎁`)
+                        .setThumbnail(user.displayAvatarURL())
+                        .addFields(
+                            { name: '🎂 Tuổi mới', value: 'Thêm một tuổi mới, thêm nhiều thành công!', inline: true },
+                            { name: '🎁 Lời chúc', value: 'Luôn vui vẻ và hạnh phúc nhé!', inline: true }
+                        );
+
+                    // Gửi đến tất cả server có cấu hình kênh sinh nhật
+                    let sentToGuilds = 0;
+                    for (const [guildId, channelId] of Object.entries(birthdayConfig)) {
+                        const guild = client.guilds.cache.get(guildId);
+                        if (guild) {
+                            const channel = guild.channels.cache.get(channelId);
+                            if (channel) {
+                                const member = guild.members.cache.get(userId);
+                                if (member) {
+                                    await channel.send({ 
+                                        content: `🎉 ${member.toString()}`,
+                                        embeds: [embed] 
+                                    }).catch(error => {
+                                        Logger.error(`Lỗi gửi tin nhắn sinh nhật trong ${guild.name}:`, error);
+                                    });
+                                    sentToGuilds++;
+                                    Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} trong ${guild.name}`);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (sentToGuilds > 0) {
+                        Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} đến ${sentToGuilds} server`);
+                    }
+                }
+            }
+        }
+
+        if (birthdayCount > 0) {
+            Logger.success(`Đã chúc mừng sinh nhật ${birthdayCount} người dùng`);
+        }
+    } catch (error) {
+        Logger.error('Lỗi kiểm tra sinh nhật:', error);
+    }
+}
+
 // ==================== XỬ LÝ SỰ KIỆN CHÍNH ====================
 
 client.on('ready', async () => {
@@ -557,7 +640,9 @@ client.on('ready', async () => {
     });
 
     await setupScheduledMessages();
-    setInterval(checkBirthdays, 60 * 60 * 1000);
+    
+    // Thay đổi: Chỉ kiểm tra sinh nhật mỗi 6 tiếng thay vì mỗi giờ
+    setInterval(checkBirthdays, 6 * 60 * 60 * 1000); // 6 tiếng
     checkBirthdays();
 
     Logger.success('Bot đã khởi động thành công!');
@@ -1191,7 +1276,38 @@ client.on('messageCreate', async (message) => {
             );
 
         await message.reply({ embeds: [embed] });
-    } 
+    }
+
+    // ==================== THÊM LỆNH DEBUG SINH NHẬT ====================
+
+    if (command === 'debugbirthday') {
+        const today = new Date();
+        const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        
+        const embed = createEmbed('info', '🔧 Debug Hệ Thống Sinh Nhật')
+            .addFields(
+                { name: '📅 Ngày hôm nay', value: todayStr, inline: true },
+                { name: '🕒 Lần check cuối', value: birthdayCache.lastCheck || 'Chưa có', inline: true },
+                { name: '👤 Đã gửi hôm nay', value: birthdayCache.sentToday.size.toString(), inline: true },
+                { name: '📊 Cache sentToday', value: Array.from(birthdayCache.sentToday).join('\n') || 'Không có', inline: false }
+            );
+        
+        await message.reply({ embeds: [embed] });
+    }
+
+    if (command === 'resetbirthdaycache') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+            return message.reply({ embeds: [embed] });
+        }
+        
+        birthdayCache.sentToday.clear();
+        birthdayCache.lastCheck = null;
+        
+        const embed = createEmbed('success', '✅ Thành công', 'Đã reset cache sinh nhật!');
+        await message.reply({ embeds: [embed] });
+        Logger.info(`Đã reset cache sinh nhật bởi ${message.author.tag}`);
+    }
 });
 
 // ==================== HỆ THỐNG TIN NHẮN TỰ ĐỘNG ====================
@@ -1256,67 +1372,6 @@ async function setupScheduledMessages() {
         Logger.success('Đã thiết lập hệ thống tin nhắn tự động');
     } catch (error) {
         Logger.error('Lỗi thiết lập tin nhắn tự động:', error);
-    }
-}
-
-// ==================== HỆ THỐNG SINH NHẬT ====================
-
-async function checkBirthdays() {
-    try {
-        const birthdays = await loadData('birthdays.json');
-        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
-        const today = new Date();
-        const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-
-        Logger.info(`Kiểm tra sinh nhật: ${todayStr}`, {
-            totalUsers: Object.keys(birthdays).length,
-            birthdayChannels: Object.keys(birthdayConfig).length
-        });
-
-        let birthdayCount = 0;
-
-        for (const [userId, birthday] of Object.entries(birthdays)) {
-            if (birthday === todayStr) {
-                const user = await client.users.fetch(userId).catch(() => null);
-                if (user) {
-                    birthdayCount++;
-                    
-                    const embed = createEmbed('fun', '🎉 Chúc mừng sinh nhật!', 
-                        `Chúc mừng sinh nhật ${user}! 🎂\n\nChúc bạn một ngày thật tuyệt vời với nhiều niềm vui và hạnh phúc! 🎈🎁`)
-                        .setThumbnail(user.displayAvatarURL())
-                        .addFields(
-                            { name: '🎂 Tuổi mới', value: 'Thêm một tuổi mới, thêm nhiều thành công!', inline: true },
-                            { name: '🎁 Lời chúc', value: 'Luôn vui vẻ và hạnh phúc nhé!', inline: true }
-                        );
-
-                    // Gửi đến tất cả server có cấu hình kênh sinh nhật
-                    for (const [guildId, channelId] of Object.entries(birthdayConfig)) {
-                        const guild = client.guilds.cache.get(guildId);
-                        if (guild) {
-                            const channel = guild.channels.cache.get(channelId);
-                            if (channel) {
-                                const member = guild.members.cache.get(userId);
-                                if (member) {
-                                    await channel.send({ 
-                                        content: `🎉 ${member.toString()}`,
-                                        embeds: [embed] 
-                                    }).catch(error => {
-                                        Logger.error(`Lỗi gửi tin nhắn sinh nhật trong ${guild.name}:`, error);
-                                    });
-                                    Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} trong ${guild.name}`);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (birthdayCount > 0) {
-            Logger.success(`Đã chúc mừng sinh nhật ${birthdayCount} người dùng`);
-        }
-    } catch (error) {
-        Logger.error('Lỗi kiểm tra sinh nhật:', error);
     }
 }
 
