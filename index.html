@@ -2,7 +2,7 @@
   @Author: Your name
   @Date:   2025-10-23 19:31:07
   @Last Modified by:   Your name
-  @Last Modified time: 2025-10-23 23:44:30
+  @Last Modified time: 2025-10-25 19:39:16
 -->
 <!DOCTYPE html>
 <html lang="vi">
@@ -10,9 +10,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LeiLaBOT - Discord Bot Đa Năng Hiện Đại</title>
+    <meta name="description" content="LeiLaBOT - Discord bot đa năng với hệ thống âm nhạc, quản lý server, tin nhắn tự động và hơn 50+ tính năng hiện đại">
+    <meta name="keywords" content="discord bot, leilabot, music bot, discord, bot đa năng">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
     <link rel="stylesheet" href="animations.css">
+    <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.8.0/vanilla-tilt.min.js" defer></script>
     <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
@@ -48,6 +51,7 @@
             color: var(--light);
             line-height: 1.6;
             overflow-x: hidden;
+            scroll-behavior: smooth;
         }
         
         .container {
@@ -160,6 +164,82 @@
             background-color: #4ae086;
         }
         
+        /* Navigation */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(35, 39, 42, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            padding: 15px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar.scrolled {
+            padding: 10px 0;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .nav-logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--light);
+            text-decoration: none;
+        }
+        
+        .nav-links {
+            display: flex;
+            list-style: none;
+        }
+        
+        .nav-links li {
+            margin-left: 30px;
+        }
+        
+        .nav-links a {
+            color: var(--light);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--secondary);
+            transition: width 0.3s ease;
+        }
+        
+        .nav-links a:hover {
+            color: var(--secondary);
+        }
+        
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+        
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--light);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
         /* Sections - Updated with modern design */
         section {
             padding: 100px 0;
@@ -196,6 +276,7 @@
             text-align: center;
             transition: all 0.4s ease;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
             position: relative;
@@ -231,6 +312,44 @@
             color: var(--light);
         }
         
+        /* About Section */
+        .about-content {
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .about-text {
+            font-size: 1.2rem;
+            margin-bottom: 50px;
+            line-height: 1.8;
+        }
+        
+        .feature-cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+        
+        .feature-card-small {
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card-small:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .feature-icon-small {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            color: var(--secondary);
+        }
+        
         /* Commands - Updated with modern design */
         .commands-container {
             background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
@@ -238,6 +357,7 @@
             padding: 40px;
             margin-top: 30px;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
@@ -307,6 +427,7 @@
             padding: 30px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 15px;
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             transition: transform 0.3s ease;
         }
@@ -336,8 +457,21 @@
             margin: 0 auto;
             max-width: 800px;
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .invite-text {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            line-height: 1.7;
+        }
+        
+        .invite-info {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: var(--gray);
         }
         
         /* Footer - Updated with modern design */
@@ -476,6 +610,81 @@
             font-weight: bold;
         }
         
+        /* Scroll to top button */
+        .scroll-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+            visibility: hidden;
+            z-index: 999;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .scroll-top.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .scroll-top:hover {
+            background: var(--secondary);
+            color: var(--darker);
+            transform: translateY(-5px);
+        }
+        
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--darker);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+        
+        .loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        .loading-logo {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: var(--secondary);
+        }
+        
+        .loading-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .loading-progress {
+            height: 100%;
+            background: var(--secondary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             h1 {
@@ -505,10 +714,68 @@
             .footer-link {
                 margin: 10px 0;
             }
+            
+            .nav-links {
+                position: fixed;
+                top: 70px;
+                left: 0;
+                width: 100%;
+                background: var(--dark);
+                flex-direction: column;
+                align-items: center;
+                padding: 20px 0;
+                transform: translateY(-100%);
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+                box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            .nav-links.active {
+                transform: translateY(0);
+                opacity: 1;
+                visibility: visible;
+            }
+            
+            .nav-links li {
+                margin: 15px 0;
+            }
+            
+            .mobile-menu-btn {
+                display: block;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo">
+            <i class="fas fa-robot"></i>
+        </div>
+        <h2>LeiLaBOT</h2>
+        <div class="loading-bar">
+            <div class="loading-progress" id="loadingProgress"></div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="container nav-container">
+            <a href="#" class="nav-logo">LeiLaBOT</a>
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <i class="fas fa-bars"></i>
+            </button>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="#about">Giới Thiệu</a></li>
+                <li><a href="#features">Tính Năng</a></li>
+                <li><a href="#commands">Lệnh</a></li>
+                <li><a href="#invite">Mời Bot</a></li>
+                <li><a href="https://discord.gg/9CFJxJUBj7">Hỗ Trợ</a></li>
+            </ul>
+        </div>
+    </nav>
+
     <!-- Header -->
     <header>
         <div class="particles-container" id="particles"></div>
@@ -529,30 +796,30 @@
     <section id="about">
         <div class="container">
             <h2 class="section-title" data-aos="fade-up">Giới Thiệu LeiLaBOT</h2>
-            <div style="text-align: center; max-width: 900px; margin: 0 auto;" data-aos="fade-up" data-aos-delay="100">
-                <p style="font-size: 1.3rem; margin-bottom: 40px; line-height: 1.8;">
+            <div class="about-content" data-aos="fade-up" data-aos-delay="100">
+                <p class="about-text">
                     LeiLaBOT là một Discord bot đa chức năng được phát triển với mục đích mang lại trải nghiệm tốt nhất cho cộng đồng Discord. 
                     Với giao diện thân thiện, dễ sử dụng và hơn <span class="highlight">50+ tính năng</span>, bot hỗ trợ đầy đủ từ âm nhạc, 
                     quản lý server đến tự động hóa thông minh với hệ thống tin nhắn theo khung giờ.
                 </p>
-                <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 25px; margin-top: 50px;">
-                    <div class="feature-card" style="width: 220px;" data-aos="zoom-in" data-aos-delay="200">
-                        <i class="fas fa-music" style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 20px;"></i>
+                <div class="feature-cards-container">
+                    <div class="feature-card feature-card-small" data-aos="zoom-in" data-aos-delay="200">
+                        <i class="fas fa-music feature-icon-small"></i>
                         <h3>Hệ Thống Âm Nhạc</h3>
                         <p>Phát nhạc chất lượng cao từ YouTube với đầy đủ tính năng</p>
                     </div>
-                    <div class="feature-card" style="width: 220px;" data-aos="zoom-in" data-aos-delay="300">
-                        <i class="fas fa-robot" style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 20px;"></i>
+                    <div class="feature-card feature-card-small" data-aos="zoom-in" data-aos-delay="300">
+                        <i class="fas fa-robot feature-icon-small"></i>
                         <h3>Tự Động Hóa</h3>
                         <p>Tin nhắn tự động, chào mừng, tạm biệt thông minh</p>
                     </div>
-                    <div class="feature-card" style="width: 220px;" data-aos="zoom-in" data-aos-delay="400">
-                        <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 20px;"></i>
+                    <div class="feature-card feature-card-small" data-aos="zoom-in" data-aos-delay="400">
+                        <i class="fas fa-shield-alt feature-icon-small"></i>
                         <h3>Quản Lý Server</h3>
                         <p>Công cụ quản lý server mạnh mẽ và linh hoạt</p>
                     </div>
-                    <div class="feature-card" style="width: 220px;" data-aos="zoom-in" data-aos-delay="500">
-                        <i class="fas fa-gamepad" style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 20px;"></i>
+                    <div class="feature-card feature-card-small" data-aos="zoom-in" data-aos-delay="500">
+                        <i class="fas fa-gamepad feature-icon-small"></i>
                         <h3>Giải Trí</h3>
                         <p>Bình chọn, dịch thuật, sinh nhật và nhiều tính năng khác</p>
                     </div>
@@ -772,6 +1039,18 @@
                             <div class="command-name">setbirthday DD-MM</div>
                             <div class="command-desc">Thiết lập ngày sinh nhật</div>
                         </div>
+                        <div class="command-item">
+                            <div class="command-name">setbirthdaychannel #channel</div>
+                            <div class="command-desc">Thiết lập kênh thông báo sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">birthdayinfo</div>
+                            <div class="command-desc">Xem thông tin hệ thống sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">checkbirthday</div>
+                            <div class="command-desc">Kiểm tra sinh nhật hôm nay</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -810,6 +1089,18 @@
                             <div class="command-name">channelinfo</div>
                             <div class="command-desc">Xem thông tin cấu hình bot</div>
                         </div>
+                        <div class="command-item">
+                            <div class="command-name">debugconfig</div>
+                            <div class="command-desc">Kiểm tra cấu hình bot</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">debugschedule</div>
+                            <div class="command-desc">Kiểm tra hệ thống tin nhắn tự động</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">reloadconfig</div>
+                            <div class="command-desc">Tải lại cấu hình (admin)</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -846,14 +1137,14 @@
         <div class="container">
             <div class="invite-section" data-aos="zoom-in">
                 <h2 class="section-title">Mời LeiLaBOT Vào Server Của Bạn</h2>
-                <p style="font-size: 1.3rem; max-width: 600px; margin: 0 auto 40px; line-height: 1.7;">
+                <p class="invite-text">
                     Thêm LeiLaBOT vào server Discord của bạn chỉ với một cú nhấp chuột và bắt đầu trải nghiệm những tính năng tuyệt vời!
                     Hoàn toàn miễn phí với tất cả tính năng cao cấp.
                 </p>
-                <a href="https://discord.com/oauth2/authorize?client_id=1421716299947708436" class="btn" style="font-size: 1.3rem; padding: 18px 45px;">
+                <a href="https://discord.com/oauth2/authorize?client_id=1421716299947708436" class="btn invite-button">
                     <i class="fab fa-discord"></i> Mời Bot Ngay
                 </a>
-                <p style="margin-top: 30px; color: var(--gray); font-size: 1.1rem;">
+                <p class="invite-info">
                     <i class="fas fa-info-circle"></i> Yêu cầu: Quyền "Quản trị viên" hoặc "Quản lý server" trên Discord
                 </p>
             </div>
@@ -873,19 +1164,24 @@
                 <a href="privacy.html" class="footer-link">Chính Sách</a>
             </div>
             <div class="social-links">
-                <a href="https://discord.com/cuonggatsby94" class="social-btn">
+                <a href="https://discord.com/cuonggatsby94" class="social-btn" title="Discord" aria-label="Liên kết Discord">
                     <i class="fab fa-discord"></i>
                 </a>
-                <a href="https://github.com/CuongGatsBy94/LeiLaBOT" class="social-btn">
+                <a href="https://github.com/CuongGatsBy94/LeiLaBOT" class="social-btn" title="GitHub" aria-label="Liên kết GitHub">
                     <i class="fab fa-github"></i>
                 </a>
-                <a href="https://www.youtube.com/@cuonggatsby5898" class="social-btn">
+                <a href="https://www.youtube.com/@cuonggatsby5898" class="social-btn" title="YouTube" aria-label="Liên kết YouTube">
                     <i class="fab fa-youtube"></i>
                 </a>
             </div>
             <p class="copyright">© 2025 LeiLaBOT. Tất cả quyền được bảo lưu.</p>
         </div>
     </footer>
+
+    <!-- Scroll to top button -->
+    <div class="scroll-top" id="scrollTop">
+        <i class="fas fa-chevron-up"></i>
+    </div>
 
     <!-- Floating Elements -->
     <div class="floating-elements">
@@ -922,6 +1218,27 @@
         
         // Khi trang được tải
         document.addEventListener('DOMContentLoaded', function() {
+            // Loading screen
+            const loadingScreen = document.getElementById('loadingScreen');
+            const loadingProgress = document.getElementById('loadingProgress');
+            
+            // Simulate loading progress
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    loadingProgress.style.width = '100%';
+                    
+                    setTimeout(() => {
+                        loadingScreen.classList.add('hidden');
+                    }, 500);
+                } else {
+                    loadingProgress.style.width = progress + '%';
+                }
+            }, 200);
+            
             // Khởi tạo số đếm
             const serverCount = document.getElementById('serverCount');
             const userCount = document.getElementById('userCount');
@@ -947,6 +1264,50 @@
 
             // Tạo hiệu ứng particles
             createParticles();
+            
+            // Navbar scroll effect
+            const navbar = document.getElementById('navbar');
+            window.addEventListener('scroll', () => {
+                if (window.scrollY > 50) {
+                    navbar.classList.add('scrolled');
+                } else {
+                    navbar.classList.remove('scrolled');
+                }
+                
+                // Scroll to top button
+                const scrollTop = document.getElementById('scrollTop');
+                if (window.scrollY > 300) {
+                    scrollTop.classList.add('active');
+                } else {
+                    scrollTop.classList.remove('active');
+                }
+            });
+            
+            // Scroll to top functionality
+            document.getElementById('scrollTop').addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+            
+            // Mobile menu functionality
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const navLinks = document.getElementById('navLinks');
+            
+            mobileMenuBtn.addEventListener('click', () => {
+                navLinks.classList.toggle('active');
+                mobileMenuBtn.innerHTML = navLinks.classList.contains('active') ? 
+                    '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+            });
+            
+            // Close mobile menu when clicking on a link
+            document.querySelectorAll('.nav-links a').forEach(link => {
+                link.addEventListener('click', () => {
+                    navLinks.classList.remove('active');
+                    mobileMenuBtn.innerHTML = '<i class="fas fa-bars"></i>';
+                });
+            });
         });
 
         // Tạo hiệu ứng particles
@@ -979,6 +1340,28 @@
                 particlesContainer.appendChild(particle);
             }
         }
+        
+        // Add particle animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes particleFloat {
+                0% {
+                    transform: translateY(0) translateX(0);
+                    opacity: 0;
+                }
+                10% {
+                    opacity: 1;
+                }
+                90% {
+                    opacity: 1;
+                }
+                100% {
+                    transform: translateY(-100px) translateX(${Math.random() > 0.5 ? '-' : ''}${Math.random() * 50}px);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-25 18:16:05
+ * @Last Modified time: 2025-10-25 19:29:34
  */
 
 require('dotenv').config();
@@ -830,11 +830,11 @@ client.on('messageCreate', async (message) => {
                     new ButtonBuilder()
                         .setLabel('🆘 Hỗ trợ')
                         .setStyle(ButtonStyle.Link)
-                        .setURL('https://discord.gg/9CFJxJUBj7'),
+                        .setURL('https://discord.gg/cuonggatsby94'),
                     new ButtonBuilder()
                         .setLabel('🌐 Website')
                         .setStyle(ButtonStyle.Link)
-                        .setURL('https://leilabot.railway.app')
+                        .setURL('https://leilabot.netlify.app/')
                 );
 
             await message.reply({ embeds: [embed], components: [row] });
