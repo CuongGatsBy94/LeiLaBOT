@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-26 03:05:39
+ * @Last Modified time: 2025-10-26 19:34:05
  */
 
 require('dotenv').config();
@@ -235,6 +235,274 @@ async function saveData(fileName, data) {
     Logger.info(`Đã lưu data: ${fileName}`);
 }
 
+// ==================== HỆ THỐNG SINH NHẬT NÂNG CẤP ====================
+
+// Biến để theo dõi đã gửi chúc mừng sinh nhật trong ngày
+let birthdayCache = {
+    lastCheck: null,
+    sentToday: new Set()
+};
+
+// Load cache từ file khi khởi động
+async function loadBirthdayCache() {
+    try {
+        const cacheData = await loadData('birthdayCache.json', { lastCheck: null, sentToday: [] });
+        birthdayCache.lastCheck = cacheData.lastCheck;
+        birthdayCache.sentToday = new Set(cacheData.sentToday || []);
+        Logger.info('Đã tải birthday cache từ file', { 
+            lastCheck: birthdayCache.lastCheck, 
+            sentToday: birthdayCache.sentToday.size 
+        });
+    } catch (error) {
+        Logger.error('Lỗi tải birthday cache:', error);
+    }
+}
+
+// Lưu cache vào file
+async function saveBirthdayCache() {
+    try {
+        const cacheData = {
+            lastCheck: birthdayCache.lastCheck,
+            sentToday: Array.from(birthdayCache.sentToday)
+        };
+        await saveData('birthdayCache.json', cacheData);
+    } catch (error) {
+        Logger.error('Lỗi lưu birthday cache:', error);
+    }
+}
+
+async function checkBirthdays() {
+    try {
+        const now = new Date();
+        const todayStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Reset cache nếu đã qua ngày mới
+        if (!birthdayCache.lastCheck || birthdayCache.lastCheck !== todayStr) {
+            birthdayCache.lastCheck = todayStr;
+            birthdayCache.sentToday.clear();
+            await saveBirthdayCache();
+            Logger.info(`Đã reset cache sinh nhật cho ngày ${todayStr}`);
+        }
+
+        const birthdays = await loadData('birthdays.json');
+        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
+
+        Logger.info(`Kiểm tra sinh nhật: ${todayStr}`, {
+            totalUsers: Object.keys(birthdays).length,
+            birthdayChannels: Object.keys(birthdayConfig).length,
+            sentToday: birthdayCache.sentToday.size
+        });
+
+        let birthdayCount = 0;
+
+        for (const [userId, birthday] of Object.entries(birthdays)) {
+            if (birthday === todayStr && !birthdayCache.sentToday.has(userId)) {
+                const user = await client.users.fetch(userId).catch(() => null);
+                if (user) {
+                    birthdayCount++;
+                    birthdayCache.sentToday.add(userId);
+                    await saveBirthdayCache();
+                    
+                    const embed = createEmbed('fun', '🎉 Chúc mừng sinh nhật!', 
+                        `Chúc mừng sinh nhật ${user}! 🎂\n\nChúc bạn một ngày thật tuyệt vời với nhiều niềm vui và hạnh phúc! 🎈🎁`)
+                        .setThumbnail(user.displayAvatarURL())
+                        .addFields(
+                            { name: '🎂 Tuổi mới', value: 'Thêm một tuổi mới, thêm nhiều thành công!', inline: true },
+                            { name: '🎁 Lời chúc', value: 'Luôn vui vẻ và hạnh phúc nhé!', inline: true }
+                        );
+
+                    // Gửi đến tất cả server có cấu hình kênh sinh nhật
+                    let sentToGuilds = 0;
+                    for (const [guildId, channelId] of Object.entries(birthdayConfig)) {
+                        const guild = client.guilds.cache.get(guildId);
+                        if (guild) {
+                            const channel = guild.channels.cache.get(channelId);
+                            if (channel) {
+                                const member = guild.members.cache.get(userId);
+                                if (member) {
+                                    await channel.send({ 
+                                        content: `🎉 ${member.toString()}`,
+                                        embeds: [embed] 
+                                    }).catch(error => {
+                                        Logger.error(`Lỗi gửi tin nhắn sinh nhật trong ${guild.name}:`, error);
+                                    });
+                                    sentToGuilds++;
+                                    Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} trong ${guild.name}`);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (sentToGuilds > 0) {
+                        Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} đến ${sentToGuilds} server`);
+                    }
+                }
+            }
+        }
+
+        if (birthdayCount > 0) {
+            Logger.success(`Đã chúc mừng sinh nhật ${birthdayCount} người dùng`);
+        }
+    } catch (error) {
+        Logger.error('Lỗi kiểm tra sinh nhật:', error);
+    }
+}
+
+// ==================== TIN NHẮN CHÀO MỪNG & TẠM BIỆT ====================
+
+const welcomeMessages = [
+    {
+        title: "🎉 CHÀO MỪNG THÀNH VIÊN MỚI!",
+        description: "Chào mừng {user} đến với {server}! 🎊",
+        content: "Chúng tôi rất vui khi có bạn tham gia cộng đồng! Hãy giới thiệu đôi chút về bản thân nhé! 💫",
+        color: 0x57F287,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-1.png"
+    },
+    {
+        title: "🌟 XIN CHÀO!",
+        description: "Ồ! {user} vừa gia nhập {server}! ✨",
+        content: "Cánh cửa thần kỳ vừa mở ra và một thành viên mới đã xuất hiện! Hãy chào đón nào! 🎇",
+        color: 0xFEE75C,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-2.png"
+    },
+    {
+        title: "🤗 WELCOME ABOARD!",
+        description: "Xin chào {user}! Cộng đồng {server} chào đón bạn! 🎈",
+        content: "Bạn là thành viên thứ {memberCount} của chúng tôi! Hãy cùng xây dựng một cộng đồng tuyệt vời nhé! 🏰",
+        color: 0xEB459E,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-3.png"
+    },
+    {
+        title: "🚀 PHÁT HIỆN THÀNH VIÊN MỚI!",
+        description: "Chào mừng {user} đã hạ cánh tại {server}! 🌠",
+        content: "Chuyến phiêu lưu mới của bạn tại {server} sắp bắt đầu! Hãy sẵn sàng cho những trải nghiệm tuyệt vời! 🎮",
+        color: 0x5865F2,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-4.png"
+    },
+    {
+        title: "💫 CÓ THÀNH VIÊN MỚI!",
+        description: "Hey {user}! Bạn đã tìm thấy {server} - ngôi nhà mới của bạn! 🏡",
+        content: "Thế giới {server} chào đón bạn! Hãy khám phá và kết nối với mọi người nhé! 🌈",
+        color: 0x99AAB5,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-5.png"
+    }
+];
+
+const goodbyeMessages = [
+    {
+        title: "😢 TẠM BIỆT!",
+        description: "{user} đã rời khỏi {server}...",
+        content: "Chúc bạn may mắn trên hành trình tiếp theo! Hy vọng sẽ gặp lại bạn một ngày không xa! 🌙",
+        color: 0xED4245,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-1.png"
+    },
+    {
+        title: "👋 ĐÃ CÓ NGƯỜI RỜI ĐI",
+        description: "{user} vừa nói lời tạm biệt với {server}...",
+        content: "Cánh cửa đóng lại, nhưng kỷ niệm vẫn còn đây. Hẹn gặp lại! 💔",
+        color: 0xFEE75C,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-2.png"
+    },
+    {
+        title: "🚪 THÀNH VIÊN RỜI SERVER",
+        description: "Tạm biệt {user}! Cảm ơn bạn đã đồng hành cùng {server}!",
+        content: "Dù bạn đi đâu, chúng tôi vẫn sẽ nhớ về khoảng thời gian bạn ở đây! 📸",
+        color: 0x99AAB5,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-3.png"
+    },
+    {
+        title: "🌅 KẾT THÚC HÀNH TRÌNH",
+        description: "{user} đã kết thúc hành trình tại {server}...",
+        content: "Mọi cuộc gặp gỡ rồi sẽ có lúc chia ly. Chúc bạn tìm thấy nơi mình thuộc về! 🏞️",
+        color: 0x5865F2,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-4.png"
+    },
+    {
+        title: "💨 CÓ NGƯỜI VỜI BAY MẤT",
+        description: "{user} đã biến mất khỏi {server} như một cơn gió...",
+        content: "Thời gian của bạn ở đây có thể ngắn ngủi, nhưng vẫn đáng để trân trọng! 🍃",
+        color: 0xEB459E,
+        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-5.png"
+    }
+];
+
+// ==================== HỆ THỐNG TIN NHẮN TỰ ĐỘNG ====================
+
+const scheduleTemplates = {
+    morning: {
+        title: "🌅 CHÀO BUỔI SÁNG - 08:00",
+        description: "Hãy bắt đầu ngày mới với năng lượng tích cực và tràn đầy cảm hứng! 🌞",
+        tip: "💡 Mẹo: Uống một ly nước ấm để khởi động hệ tiêu hóa",
+        tomorrow: "Chúc bạn một ngày làm việc hiệu quả và nhiều thành công! 💼",
+        footer: "Have a wonderful day! 🌈"
+    },
+    noon: {
+        title: "🍱 GIỜ ĂN TRƯA - 12:00",
+        description: "Đã đến giờ nghỉ ngơi và nạp năng lượng cho buổi chiều! 🍽️",
+        tip: "💡 Mẹo: Ăn chậm nhai kỹ giúp tiêu hóa tốt hơn",
+        tomorrow: "Buổi chiều làm việc hiệu quả và tràn đầy năng lượng! 📊",
+        footer: "Enjoy your meal! 😋"
+    },
+    afternoon: {
+        title: "🌤️ BUỔI CHIỀU - 17:30", 
+        description: "Cố lên, chỉ còn một chút nữa là hoàn thành ngày làm việc! 💪",
+        tip: "💡 Mẹo: Đứng dậy vươn vai sau mỗi 30 phút làm việc",
+        tomorrow: "Hẹn gặp lại bạn vào ngày mai với nhiều điều thú vị! 🌇",
+        footer: "You're doing great! 🎯"
+    },
+    evening: {
+        title: "🌃 BUỔI TỐI - 20:00",
+        description: "Thời gian thư giãn và tận hưởng không khí gia đình ấm áp! 🛋️",
+        tip: "💡 Mẹo: Tắt các thiết bị điện tử 1 giờ trước khi ngủ",
+        tomorrow: "Ngày mai sẽ mang đến những cơ hội mới tuyệt vời! ✨",
+        footer: "Relax and recharge! 🎮"
+    },
+    night: {
+        title: "🌙 CHÚC NGỦ NGON - 22:00",
+        description: "Đêm đã khuya! Hãy tắt máy và nghỉ ngơi thôi nào! 🛌",
+        tip: "💡 Mẹo: Giữ phòng ngủ mát mẻ và thoáng khí",
+        tomorrow: "Hẹn gặp lại vào buổi sáng! 🌅",
+        footer: "Sweet dreams! 💫"
+    }
+};
+
+function createScheduleEmbed(type, customDescription = null) {
+    const template = scheduleTemplates[type];
+    if (!template) return null;
+
+    const colors = {
+        morning: 0xFFD700,    // Vàng
+        noon: 0x32CD32,       // Xanh lá
+        afternoon: 0xFFA500,  // Cam
+        evening: 0x8A2BE2,    // Tím
+        night: 0x000080       // Xanh đêm
+    };
+
+    const embed = new EmbedBuilder()
+        .setColor(colors[type])
+        .setTitle(template.title)
+        .setDescription(customDescription || template.description)
+        .addFields(
+            { 
+                name: '🌟 ' + (type === 'morning' ? 'Mẹo buổi sáng' : 
+                              type === 'noon' ? 'Mẹo ăn uống' :
+                              type === 'afternoon' ? 'Mẹo làm việc' :
+                              type === 'evening' ? 'Mẹo thư giãn' : 'Mẹo ngủ ngon'), 
+                value: template.tip, 
+                inline: false 
+            },
+            { 
+                name: '📅 ' + (type === 'night' ? 'Ngày mai' : 'Tiếp theo'), 
+                value: template.tomorrow, 
+                inline: false 
+            }
+        )
+        .setFooter({ text: template.footer })
+        .setTimestamp();
+
+    return embed;
+}
+
 // ==================== HỆ THỐNG ÂM NHẠC ====================
 
 function getQueue(guildId) {
@@ -386,244 +654,6 @@ async function playSong(guildId) {
     }
 }
 
-// ==================== TIN NHẮN CHÀO MỪNG & TẠM BIỆT ====================
-
-const welcomeMessages = [
-    {
-        title: "🎉 CHÀO MỪNG THÀNH VIÊN MỚI!",
-        description: "Chào mừng {user} đến với {server}! 🎊",
-        content: "Chúng tôi rất vui khi có bạn tham gia cộng đồng! Hãy giới thiệu đôi chút về bản thân nhé! 💫",
-        color: 0x57F287,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-1.png"
-    },
-    {
-        title: "🌟 XIN CHÀO!",
-        description: "Ồ! {user} vừa gia nhập {server}! ✨",
-        content: "Cánh cửa thần kỳ vừa mở ra và một thành viên mới đã xuất hiện! Hãy chào đón nào! 🎇",
-        color: 0xFEE75C,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-2.png"
-    },
-    {
-        title: "🤗 WELCOME ABOARD!",
-        description: "Xin chào {user}! Cộng đồng {server} chào đón bạn! 🎈",
-        content: "Bạn là thành viên thứ {memberCount} của chúng tôi! Hãy cùng xây dựng một cộng đồng tuyệt vời nhé! 🏰",
-        color: 0xEB459E,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-3.png"
-    },
-    {
-        title: "🚀 PHÁT HIỆN THÀNH VIÊN MỚI!",
-        description: "Chào mừng {user} đã hạ cánh tại {server}! 🌠",
-        content: "Chuyến phiêu lưu mới của bạn tại {server} sắp bắt đầu! Hãy sẵn sàng cho những trải nghiệm tuyệt vời! 🎮",
-        color: 0x5865F2,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-4.png"
-    },
-    {
-        title: "💫 CÓ THÀNH VIÊN MỚI!",
-        description: "Hey {user}! Bạn đã tìm thấy {server} - ngôi nhà mới của bạn! 🏡",
-        content: "Thế giới {server} chào đón bạn! Hãy khám phá và kết nối với mọi người nhé! 🌈",
-        color: 0x99AAB5,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/welcome-5.png"
-    }
-];
-
-const goodbyeMessages = [
-    {
-        title: "😢 TẠM BIỆT!",
-        description: "{user} đã rời khỏi {server}...",
-        content: "Chúc bạn may mắn trên hành trình tiếp theo! Hy vọng sẽ gặp lại bạn một ngày không xa! 🌙",
-        color: 0xED4245,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-1.png"
-    },
-    {
-        title: "👋 ĐÃ CÓ NGƯỜI RỜI ĐI",
-        description: "{user} vừa nói lời tạm biệt với {server}...",
-        content: "Cánh cửa đóng lại, nhưng kỷ niệm vẫn còn đây. Hẹn gặp lại! 💔",
-        color: 0xFEE75C,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-2.png"
-    },
-    {
-        title: "🚪 THÀNH VIÊN RỜI SERVER",
-        description: "Tạm biệt {user}! Cảm ơn bạn đã đồng hành cùng {server}!",
-        content: "Dù bạn đi đâu, chúng tôi vẫn sẽ nhớ về khoảng thời gian bạn ở đây! 📸",
-        color: 0x99AAB5,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-3.png"
-    },
-    {
-        title: "🌅 KẾT THÚC HÀNH TRÌNH",
-        description: "{user} đã kết thúc hành trình tại {server}...",
-        content: "Mọi cuộc gặp gỡ rồi sẽ có lúc chia ly. Chúc bạn tìm thấy nơi mình thuộc về! 🏞️",
-        color: 0x5865F2,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-4.png"
-    },
-    {
-        title: "💨 CÓ NGƯỜI VỪA BAY MẤT",
-        description: "{user} đã biến mất khỏi {server} như một cơn gió...",
-        content: "Thời gian của bạn ở đây có thể ngắn ngủi, nhưng vẫn đáng để trân trọng! 🍃",
-        color: 0xEB459E,
-        image: "https://cdn.discordapp.com/attachments/1045746639303876638/1234567890123456789/goodbye-5.png"
-    }
-];
-
-// ==================== HỆ THỐNG TIN NHẮN TỰ ĐỘNG ====================
-
-const scheduleTemplates = {
-    morning: {
-        title: "🌅 CHÀO BUỔI SÁNG - 08:00",
-        description: "Hãy bắt đầu ngày mới với năng lượng tích cực và tràn đầy cảm hứng! 🌞",
-        tip: "💡 Mẹo: Uống một ly nước ấm để khởi động hệ tiêu hóa",
-        tomorrow: "Chúc bạn một ngày làm việc hiệu quả và nhiều thành công! 💼",
-        footer: "Have a wonderful day! 🌈"
-    },
-    noon: {
-        title: "🍱 GIỜ ĂN TRƯA - 12:00",
-        description: "Đã đến giờ nghỉ ngơi và nạp năng lượng cho buổi chiều! 🍽️",
-        tip: "💡 Mẹo: Ăn chậm nhai kỹ giúp tiêu hóa tốt hơn",
-        tomorrow: "Buổi chiều làm việc hiệu quả và tràn đầy năng lượng! 📊",
-        footer: "Enjoy your meal! 😋"
-    },
-    afternoon: {
-        title: "🌤️ BUỔI CHIỀU - 17:30", 
-        description: "Cố lên, chỉ còn một chút nữa là hoàn thành ngày làm việc! 💪",
-        tip: "💡 Mẹo: Đứng dậy vươn vai sau mỗi 30 phút làm việc",
-        tomorrow: "Hẹn gặp lại bạn vào ngày mai với nhiều điều thú vị! 🌇",
-        footer: "You're doing great! 🎯"
-    },
-    evening: {
-        title: "🌃 BUỔI TỐI - 20:00",
-        description: "Thời gian thư giãn và tận hưởng không khí gia đình ấm áp! 🛋️",
-        tip: "💡 Mẹo: Tắt các thiết bị điện tử 1 giờ trước khi ngủ",
-        tomorrow: "Ngày mai sẽ mang đến những cơ hội mới tuyệt vời! ✨",
-        footer: "Relax and recharge! 🎮"
-    },
-    night: {
-        title: "🌙 CHÚC NGỦ NGON - 22:00",
-        description: "Đêm đã khuya! Hãy tắt máy và nghỉ ngơi thôi nào! 🛌",
-        tip: "💡 Mẹo: Giữ phòng ngủ mát mẻ và thoáng khí",
-        tomorrow: "Hẹn gặp lại vào buổi sáng! 🌅",
-        footer: "Sweet dreams! 💫"
-    }
-};
-
-function createScheduleEmbed(type, customDescription = null) {
-    const template = scheduleTemplates[type];
-    if (!template) return null;
-
-    const colors = {
-        morning: 0xFFD700,    // Vàng
-        noon: 0x32CD32,       // Xanh lá
-        afternoon: 0xFFA500,  // Cam
-        evening: 0x8A2BE2,    // Tím
-        night: 0x000080       // Xanh đêm
-    };
-
-    const embed = new EmbedBuilder()
-        .setColor(colors[type])
-        .setTitle(template.title)
-        .setDescription(customDescription || template.description)
-        .addFields(
-            { 
-                name: '🌟 ' + (type === 'morning' ? 'Mẹo buổi sáng' : 
-                              type === 'noon' ? 'Mẹo ăn uống' :
-                              type === 'afternoon' ? 'Mẹo làm việc' :
-                              type === 'evening' ? 'Mẹo thư giãn' : 'Mẹo ngủ ngon'), 
-                value: template.tip, 
-                inline: false 
-            },
-            { 
-                name: '📅 ' + (type === 'night' ? 'Ngày mai' : 'Tiếp theo'), 
-                value: template.tomorrow, 
-                inline: false 
-            }
-        )
-        .setFooter({ text: template.footer })
-        .setTimestamp();
-
-    return embed;
-}
-
-// ==================== HỆ THỐNG SINH NHẬT - ĐÃ SỬA LỖI ====================
-
-// Biến để theo dõi đã gửi chúc mừng sinh nhật trong ngày
-let birthdayCache = {
-    lastCheck: null,
-    sentToday: new Set()
-};
-
-async function checkBirthdays() {
-    try {
-        const now = new Date();
-        const todayStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        
-        // Reset cache nếu đã qua ngày mới
-        if (!birthdayCache.lastCheck || birthdayCache.lastCheck !== todayStr) {
-            birthdayCache.lastCheck = todayStr;
-            birthdayCache.sentToday.clear();
-            Logger.info(`Đã reset cache sinh nhật cho ngày ${todayStr}`);
-        }
-
-        const birthdays = await loadData('birthdays.json');
-        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
-
-        Logger.info(`Kiểm tra sinh nhật: ${todayStr}`, {
-            totalUsers: Object.keys(birthdays).length,
-            birthdayChannels: Object.keys(birthdayConfig).length,
-            sentToday: birthdayCache.sentToday.size
-        });
-
-        let birthdayCount = 0;
-
-        for (const [userId, birthday] of Object.entries(birthdays)) {
-            if (birthday === todayStr && !birthdayCache.sentToday.has(userId)) {
-                const user = await client.users.fetch(userId).catch(() => null);
-                if (user) {
-                    birthdayCount++;
-                    birthdayCache.sentToday.add(userId); // Đánh dấu đã gửi
-                    
-                    const embed = createEmbed('fun', '🎉 Chúc mừng sinh nhật!', 
-                        `Chúc mừng sinh nhật ${user}! 🎂\n\nChúc bạn một ngày thật tuyệt vời với nhiều niềm vui và hạnh phúc! 🎈🎁`)
-                        .setThumbnail(user.displayAvatarURL())
-                        .addFields(
-                            { name: '🎂 Tuổi mới', value: 'Thêm một tuổi mới, thêm nhiều thành công!', inline: true },
-                            { name: '🎁 Lời chúc', value: 'Luôn vui vẻ và hạnh phúc nhé!', inline: true }
-                        );
-
-                    // Gửi đến tất cả server có cấu hình kênh sinh nhật
-                    let sentToGuilds = 0;
-                    for (const [guildId, channelId] of Object.entries(birthdayConfig)) {
-                        const guild = client.guilds.cache.get(guildId);
-                        if (guild) {
-                            const channel = guild.channels.cache.get(channelId);
-                            if (channel) {
-                                const member = guild.members.cache.get(userId);
-                                if (member) {
-                                    await channel.send({ 
-                                        content: `🎉 ${member.toString()}`,
-                                        embeds: [embed] 
-                                    }).catch(error => {
-                                        Logger.error(`Lỗi gửi tin nhắn sinh nhật trong ${guild.name}:`, error);
-                                    });
-                                    sentToGuilds++;
-                                    Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} trong ${guild.name}`);
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (sentToGuilds > 0) {
-                        Logger.success(`Đã gửi lời chúc sinh nhật cho ${user.tag} đến ${sentToGuilds} server`);
-                    }
-                }
-            }
-        }
-
-        if (birthdayCount > 0) {
-            Logger.success(`Đã chúc mừng sinh nhật ${birthdayCount} người dùng`);
-        }
-    } catch (error) {
-        Logger.error('Lỗi kiểm tra sinh nhật:', error);
-    }
-}
-
 // ==================== XỬ LÝ SỰ KIỆN CHÍNH ====================
 
 client.on('ready', async () => {
@@ -639,10 +669,14 @@ client.on('ready', async () => {
         status: 'online'
     });
 
+    await loadBirthdayCache();
     await setupScheduledMessages();
     
-    // Thay đổi: Chỉ kiểm tra sinh nhật mỗi 6 tiếng thay vì mỗi giờ
-    setInterval(checkBirthdays, 6 * 60 * 60 * 1000); // 6 tiếng
+    // Kiểm tra sinh nhật mỗi 6 tiếng
+    setInterval(checkBirthdays, 6 * 60 * 60 * 1000);
+    // Lưu cache mỗi 5 phút
+    setInterval(saveBirthdayCache, 5 * 60 * 1000);
+    
     checkBirthdays();
 
     Logger.success('Bot đã khởi động thành công!');
@@ -847,7 +881,7 @@ client.on('messageCreate', async (message) => {
     });
 
     try {
-        // LỆNH THÔNG TIN
+        // ==================== LỆNH THÔNG TIN ====================
         if (command === 'ping') {
             const processingEmbed = createEmbed('info', '⏳ Đang xử lý...', 'Đang tính toán độ trễ...');
             const msg = await message.reply({ embeds: [processingEmbed] });
@@ -884,13 +918,18 @@ client.on('messageCreate', async (message) => {
                         inline: true
                     },
                     {
+                        name: '🎉 Sinh nhật',
+                        value: '```setbirthday, setbirthdaychannel, checkbirthday, listbirthdays, findbirthday, debugbirthday```',
+                        inline: true
+                    },
+                    {
                         name: '⏰ Tự động',
-                        value: '```setschedule, testschedule, testschedulenow, testallschedules, setbirthday, scheduleinfo, toggleschedule```',
+                        value: '```setschedule, testschedule, testschedulenow, scheduleinfo, toggleschedule```',
                         inline: true
                     },
                     {
                         name: '👋 Chào mừng',
-                        value: '```welcometemplates, goodbyetemplates, testwelcome, testgoodbye```',
+                        value: '```testwelcome, testgoodbye, welcometemplates, goodbyetemplates```',
                         inline: true
                     },
                     {
@@ -901,6 +940,11 @@ client.on('messageCreate', async (message) => {
                     {
                         name: '🌐 Tiện ích',
                         value: '```translate, weather, covid```',
+                        inline: true
+                    },
+                    {
+                        name: '🔧 Quản trị',
+                        value: '```debugconfig, reloadconfig, debugschedule, resetbirthdaycache```',
                         inline: true
                     }
                 )
@@ -925,7 +969,7 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [embed], components: [row] });
         }
 
-        // LỆNH DEBUG VÀ QUẢN LÝ
+        // ==================== LỆNH DEBUG VÀ QUẢN LÝ ====================
         if (command === 'debugconfig') {
             const botConfig = await loadConfig('botConfig.json');
             
@@ -1015,7 +1059,7 @@ client.on('messageCreate', async (message) => {
             }
         }
 
-        // LỆNH QUẢN LÝ SERVER
+        // ==================== LỆNH QUẢN LÝ SERVER ====================
         if (command === 'setschedulechannel') {
             if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
@@ -1084,7 +1128,7 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [embed] });
         }
 
-        // LỆNH CHÀO MỪNG
+        // ==================== LỆNH CHÀO MỪNG ====================
         if (command === 'testwelcome') {
             if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
@@ -1136,7 +1180,7 @@ client.on('messageCreate', async (message) => {
             await message.reply({ embeds: [successEmbed] });
         }
 
-        // LỆNH SETPREFIX
+        // ==================== LỆNH SETPREFIX ====================
         if (command === 'setprefix') {
             if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
                 const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
@@ -1156,157 +1200,355 @@ client.on('messageCreate', async (message) => {
             Logger.info(`Đã đổi prefix thành ${newPrefix} bởi ${message.author.tag}`);
         }
 
+        // ==================== LỆNH QUẢN LÝ SINH NHẬT ====================
+        if (command === 'setbirthdaychannel') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[0]);
+            if (!channel) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng đề cập đến một kênh hợp lệ!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const birthdayConfig = await loadConfig('birthdayConfig.json', {});
+            birthdayConfig[message.guild.id] = channel.id;
+            await saveConfig('birthdayConfig.json', birthdayConfig);
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã đặt kênh thông báo sinh nhật thành ${channel.toString()}\n\nThông báo sẽ được gửi vào lúc **9:00** và **19:00** hàng ngày.`);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã đặt birthday channel thành ${channel.name} trong ${message.guild.name} bởi ${message.author.tag}`);
+        }
+
+        if (command === 'setbirthday') {
+            let targetUser = message.author;
+            let dateStr = args[0];
+
+            // Kiểm tra nếu có mention user (set cho người khác)
+            if (message.mentions.users.first()) {
+                if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                    const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để đặt sinh nhật cho người khác.');
+                    return message.reply({ embeds: [embed] });
+                }
+                targetUser = message.mentions.users.first();
+                dateStr = args[1];
+            }
+
+            if (!dateStr || !/^\d{1,2}-\d{1,2}$/.test(dateStr)) {
+                const embed = createEmbed('error', '❌ Lỗi', 
+                    'Vui lòng nhập ngày sinh theo định dạng: DD-MM\n' +
+                    '**Cách sử dụng:**\n' +
+                    '`$setbirthday DD-MM` - Đặt sinh nhật cho bản thân\n' +
+                    '`$setbirthday @user DD-MM` - Đặt sinh nhật cho người khác (Admin)');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const [day, month] = dateStr.split('-').map(Number);
+            
+            // Validation ngày tháng
+            if (day < 1 || day > 31 || month < 1 || month > 12) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Ngày hoặc tháng không hợp lệ! Ngày phải từ 1-31, tháng từ 1-12.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            if (day > daysInMonth[month - 1]) {
+                const embed = createEmbed('error', '❌ Lỗi', `Tháng ${month} chỉ có ${daysInMonth[month - 1]} ngày!`);
+                return message.reply({ embeds: [embed] });
+            }
+
+            const birthdays = await loadData('birthdays.json');
+            birthdays[targetUser.id] = `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}`;
+            await saveData('birthdays.json', birthdays);
+
+            birthdayCache.sentToday.delete(targetUser.id);
+            await saveBirthdayCache();
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã đặt ngày sinh của ${targetUser.toString()} là **${dateStr}**\n\n` +
+                `Bot sẽ thông báo sinh nhật vào lúc **9:00** và **19:00** trong ngày sinh nhật! 🎉`)
+                .addFields(
+                    { name: '👤 Người dùng', value: `${targetUser.tag}`, inline: true },
+                    { name: '📅 Ngày sinh', value: dateStr, inline: true },
+                    { name: '🎉 Thông báo', value: '9:00 & 19:00', inline: true }
+                );
+
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã đặt ngày sinh cho ${targetUser.tag} là ${dateStr} bởi ${message.author.tag}`);
+        }
+
+        if (command === 'checkbirthday') {
+            Logger.command(`Lệnh checkbirthday được gọi bởi ${message.author.tag}`);
+            
+            const birthdays = await loadData('birthdays.json');
+            const today = new Date();
+            const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            
+            let birthdayUsers = [];
+            for (const [userId, birthday] of Object.entries(birthdays)) {
+                if (birthday === todayStr) {
+                    const user = await client.users.fetch(userId).catch(() => null);
+                    if (user) {
+                        birthdayUsers.push(user.tag);
+                    }
+                }
+            }
+            
+            const embed = createEmbed('info', '🎉 KIỂM TRA SINH NHẬT HÔM NAY')
+                .addFields(
+                    { name: '📅 Ngày hôm nay', value: todayStr, inline: true },
+                    { name: '👥 Số người sinh nhật', value: birthdayUsers.length.toString(), inline: true },
+                    { name: '🎂 Danh sách', value: birthdayUsers.length > 0 ? birthdayUsers.join('\n') : 'Không có ai sinh nhật hôm nay', inline: false }
+                );
+
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã kiểm tra sinh nhật hôm nay: ${birthdayUsers.length} người`);
+        }
+
+        if (command === 'debugbirthday') {
+            Logger.command(`Lệnh debugbirthday được gọi bởi ${message.author.tag}`);
+            
+            const today = new Date();
+            const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+            
+            const embed = createEmbed('info', '🔧 Debug Hệ Thống Sinh Nhật')
+                .addFields(
+                    { name: '📅 Ngày hôm nay', value: todayStr, inline: true },
+                    { name: '🕒 Lần check cuối', value: birthdayCache.lastCheck || 'Chưa có', inline: true },
+                    { name: '👤 Đã gửi hôm nay', value: birthdayCache.sentToday.size.toString(), inline: true },
+                    { name: '📊 Cache sentToday', value: Array.from(birthdayCache.sentToday).join(', ') || 'Không có', inline: false }
+                );
+            
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã debug hệ thống sinh nhật bởi ${message.author.tag}`);
+        }
+
+        if (command === 'resetbirthdaycache') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+            
+            birthdayCache.sentToday.clear();
+            birthdayCache.lastCheck = null;
+            await saveBirthdayCache();
+            
+            const embed = createEmbed('success', '✅ Thành công', 'Đã reset cache sinh nhật!');
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã reset cache sinh nhật bởi ${message.author.tag}`);
+        }
+
+        if (command === 'listbirthdays') {
+            const birthdays = await loadData('birthdays.json');
+            const page = parseInt(args[0]) || 1;
+            const itemsPerPage = 10;
+            const totalPages = Math.ceil(Object.keys(birthdays).length / itemsPerPage);
+
+            if (page < 1 || page > totalPages) {
+                const embed = createEmbed('error', '❌ Lỗi', `Trang không hợp lệ! Chỉ có ${totalPages} trang.`);
+                return message.reply({ embeds: [embed] });
+            }
+
+            const startIndex = (page - 1) * itemsPerPage;
+            const birthdayEntries = Object.entries(birthdays).slice(startIndex, startIndex + itemsPerPage);
+
+            let description = '';
+            for (const [userId, birthday] of birthdayEntries) {
+                try {
+                    const user = await client.users.fetch(userId);
+                    description += `• **${user.tag}** (${userId}) - ${birthday}\n`;
+                } catch {
+                    description += `• **Unknown User** (${userId}) - ${birthday}\n`;
+                }
+            }
+
+            const embed = createEmbed('info', '🎉 DANH SÁCH SINH NHẬT', 
+                description || 'Chưa có dữ liệu sinh nhật.')
+                .addFields(
+                    { name: '📊 Tổng số', value: Object.keys(birthdays).length.toString(), inline: true },
+                    { name: '📄 Trang', value: `${page}/${totalPages}`, inline: true }
+                )
+                .setFooter({ text: 'Sử dụng listbirthdays <số_trang> để xem trang tiếp theo' });
+
+            await message.reply({ embeds: [embed] });
+        }
+
+        if (command === 'findbirthday') {
+            const searchTerm = args.join(' ').toLowerCase();
+            if (!searchTerm) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng nhập từ khóa tìm kiếm (tên hoặc user ID)!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const birthdays = await loadData('birthdays.json');
+            const results = [];
+
+            for (const [userId, birthday] of Object.entries(birthdays)) {
+                try {
+                    const user = await client.users.fetch(userId);
+                    if (user.tag.toLowerCase().includes(searchTerm) || userId.includes(searchTerm)) {
+                        results.push({ user: user.tag, userId, birthday });
+                    }
+                } catch {
+                    if (userId.includes(searchTerm)) {
+                        results.push({ user: 'Unknown User', userId, birthday });
+                    }
+                }
+            }
+
+            if (results.length === 0) {
+                const embed = createEmbed('error', '❌ Không tìm thấy', `Không tìm thấy kết quả cho "${searchTerm}"`);
+                return message.reply({ embeds: [embed] });
+            }
+
+            let description = '';
+            results.slice(0, 10).forEach((result, index) => {
+                description += `• **${result.user}** (${result.userId}) - ${result.birthday}\n`;
+            });
+
+            const embed = createEmbed('success', '🔍 KẾT QUẢ TÌM KIẾM', description)
+                .addFields(
+                    { name: '📊 Tìm thấy', value: `${results.length} kết quả`, inline: true },
+                    { name: '💡 Hiển thị', value: `${Math.min(results.length, 10)}/${results.length}`, inline: true }
+                );
+
+            if (results.length > 10) {
+                embed.setFooter({ text: 'Chỉ hiển thị 10 kết quả đầu tiên. Sử dụng từ khóa cụ thể hơn.' });
+            }
+
+            await message.reply({ embeds: [embed] });
+        }
+
+        // ==================== LỆNH ADMIN SINH NHẬT ====================
+        if (command === 'admin_setbirthday') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            if (args.length < 2) {
+                const embed = createEmbed('error', '❌ Lỗi', 
+                    '**Cách sử dụng:** `$admin_setbirthday <user_id> DD-MM`\n' +
+                    'Ví dụ: `$admin_setbirthday 123456789012345678 15-08`');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const userId = args[0];
+            const dateStr = args[1];
+
+            // Validation user ID
+            if (!/^\d{17,20}$/.test(userId)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'User ID không hợp lệ!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            // Validation ngày tháng
+            if (!dateStr || !/^\d{1,2}-\d{1,2}$/.test(dateStr)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Định dạng ngày không hợp lệ! Sử dụng: DD-MM');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const [day, month] = dateStr.split('-').map(Number);
+            const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            
+            if (month < 1 || month > 12 || day < 1 || day > daysInMonth[month - 1]) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Ngày hoặc tháng không hợp lệ!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const birthdays = await loadData('birthdays.json');
+            birthdays[userId] = `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}`;
+            await saveData('birthdays.json', birthdays);
+
+            // Xóa cache
+            birthdayCache.sentToday.delete(userId);
+            await saveBirthdayCache();
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã đặt ngày sinh cho user ID \`${userId}\` là **${dateStr}**`)
+                .addFields(
+                    { name: '🆔 User ID', value: userId, inline: true },
+                    { name: '📅 Ngày sinh', value: dateStr, inline: true },
+                    { name: '🗑️ Để xóa', value: `$admin_removebirthday ${userId}`, inline: true }
+                );
+
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Admin ${message.author.tag} đã đặt ngày sinh cho ${userId} là ${dateStr}`);
+        }
+
+        if (command === 'removebirthday') {
+            let targetUser = message.author;
+
+            if (message.mentions.users.first()) {
+                if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                    const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để xóa sinh nhật của người khác.');
+                    return message.reply({ embeds: [embed] });
+                }
+                targetUser = message.mentions.users.first();
+            }
+
+            const birthdays = await loadData('birthdays.json');
+            
+            if (!birthdays[targetUser.id]) {
+                const embed = createEmbed('error', '❌ Lỗi', `${targetUser.toString()} chưa đặt ngày sinh.`);
+                return message.reply({ embeds: [embed] });
+            }
+
+            const removedDate = birthdays[targetUser.id];
+            delete birthdays[targetUser.id];
+            await saveData('birthdays.json', birthdays);
+
+            // Xóa cache
+            birthdayCache.sentToday.delete(targetUser.id);
+            await saveBirthdayCache();
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã xóa ngày sinh **${removedDate}** của ${targetUser.toString()}`);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Đã xóa ngày sinh của ${targetUser.tag} bởi ${message.author.tag}`);
+        }
+
+        if (command === 'admin_removebirthday') {
+            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const userId = args[0];
+            if (!userId) {
+                const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng cung cấp User ID!');
+                return message.reply({ embeds: [embed] });
+            }
+
+            const birthdays = await loadData('birthdays.json');
+            
+            if (!birthdays[userId]) {
+                const embed = createEmbed('error', '❌ Lỗi', `User ID \`${userId}\` chưa đặt ngày sinh.`);
+                return message.reply({ embeds: [embed] });
+            }
+
+            const removedDate = birthdays[userId];
+            delete birthdays[userId];
+            await saveData('birthdays.json', birthdays);
+
+            // Xóa cache
+            birthdayCache.sentToday.delete(userId);
+            await saveBirthdayCache();
+
+            const embed = createEmbed('success', '✅ Thành công', 
+                `Đã xóa ngày sinh **${removedDate}** của user ID \`${userId}\``);
+            await message.reply({ embeds: [embed] });
+            Logger.info(`Admin ${message.author.tag} đã xóa ngày sinh của ${userId}`);
+        }
+
     } catch (error) {
         Logger.error(`Lỗi xử lý lệnh ${command} từ ${message.author.tag}:`, error);
         const embed = createEmbed('error', '❌ Lỗi hệ thống', 
             'Có lỗi xảy ra khi thực hiện lệnh! Vui lòng thử lại sau.');
         await message.reply({ embeds: [embed] });
-    }
-   // ==================== THÊM LỆNH QUẢN LÝ SINH NHẬT ====================
-
-    if (command === 'setbirthdaychannel') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
-            return message.reply({ embeds: [embed] });
-        }
-
-        const channel = message.mentions.channels.first() || message.guild.channels.cache.get(args[0]);
-        if (!channel) {
-            const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng đề cập đến một kênh hợp lệ!');
-            return message.reply({ embeds: [embed] });
-        }
-
-        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
-        birthdayConfig[message.guild.id] = channel.id;
-        await saveConfig('birthdayConfig.json', birthdayConfig);
-
-        const embed = createEmbed('success', '✅ Thành công', 
-            `Đã đặt kênh thông báo sinh nhật thành ${channel.toString()}\n\nThông báo sẽ được gửi vào lúc **9:00** và **19:00** hàng ngày.`);
-        await message.reply({ embeds: [embed] });
-        Logger.info(`Đã đặt birthday channel thành ${channel.name} trong ${message.guild.name} bởi ${message.author.tag}`);
-    }
-
-    if (command === 'setbirthday') {
-        const dateStr = args[0];
-        if (!dateStr || !/^\d{1,2}-\d{1,2}$/.test(dateStr)) {
-            const embed = createEmbed('error', '❌ Lỗi', 'Vui lòng nhập ngày sinh theo định dạng: DD-MM (ví dụ: 15-08 cho ngày 15 tháng 8)');
-            return message.reply({ embeds: [embed] });
-        }
-
-        const [day, month] = dateStr.split('-').map(Number);
-        if (day < 1 || day > 31 || month < 1 || month > 12) {
-            const embed = createEmbed('error', '❌ Lỗi', 'Ngày hoặc tháng không hợp lệ!');
-            return message.reply({ embeds: [embed] });
-        }
-
-        const birthdays = await loadData('birthdays.json');
-        birthdays[message.author.id] = `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}`;
-        await saveData('birthdays.json', birthdays);
-
-        const embed = createEmbed('success', '✅ Thành công', 
-            `Đã đặt ngày sinh của bạn là **${dateStr}**\n\nBot sẽ thông báo sinh nhật của bạn vào lúc 9:00 và 19:00 trong ngày sinh nhật! 🎉`);
-        await message.reply({ embeds: [embed] });
-        Logger.info(`Đã đặt ngày sinh cho ${message.author.tag} là ${dateStr}`);
-    }
-
-    if (command === 'birthdayinfo') {
-        const birthdayConfig = await loadConfig('birthdayConfig.json', {});
-        const birthdays = await loadData('birthdays.json');
-        
-        const channel = birthdayConfig[message.guild.id] ? 
-            message.guild.channels.cache.get(birthdayConfig[message.guild.id]) : null;
-        
-        const userBirthday = birthdays[message.author.id];
-        
-        const embed = createEmbed('info', '🎉 THÔNG TIN HỆ THỐNG SINH NHẬT')
-            .addFields(
-                { 
-                    name: '📅 Ngày sinh của bạn', 
-                    value: userBirthday ? `**${userBirthday}**` : 'Chưa đặt', 
-                    inline: true 
-                },
-                { 
-                    name: '📢 Kênh thông báo', 
-                    value: channel ? channel.toString() : 'Chưa cấu hình', 
-                    inline: true 
-                },
-                { 
-                    name: '⏰ Thời gian thông báo', 
-                    value: '9:00 và 19:00 hàng ngày', 
-                    inline: true 
-                }
-            )
-            .setFooter({ text: 'Sử dụng setbirthday DD-MM để đặt ngày sinh' });
-
-        await message.reply({ embeds: [embed] });
-    }
-
-    if (command === 'checkbirthday') {
-        const birthdays = await loadData('birthdays.json');
-        const today = new Date();
-        const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-        
-        let birthdayUsers = [];
-        for (const [userId, birthday] of Object.entries(birthdays)) {
-            if (birthday === todayStr) {
-                const user = await client.users.fetch(userId).catch(() => null);
-                if (user) {
-                    birthdayUsers.push(user.tag);
-                }
-            }
-        }
-        
-        const embed = createEmbed('info', '🎉 KIỂM TRA SINH NHẬT HÔM NAY')
-            .addFields(
-                { 
-                    name: '📅 Ngày hôm nay', 
-                    value: todayStr, 
-                    inline: true 
-                },
-                { 
-                    name: '👥 Số người sinh nhật', 
-                    value: birthdayUsers.length.toString(), 
-                    inline: true 
-                },
-                { 
-                    name: '🎂 Danh sách', 
-                    value: birthdayUsers.length > 0 ? birthdayUsers.join('\n') : 'Không có ai sinh nhật hôm nay', 
-                    inline: false 
-                }
-            );
-
-        await message.reply({ embeds: [embed] });
-    }
-
-    // ==================== THÊM LỆNH DEBUG SINH NHẬT ====================
-
-    if (command === 'debugbirthday') {
-        const today = new Date();
-        const todayStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-        
-        const embed = createEmbed('info', '🔧 Debug Hệ Thống Sinh Nhật')
-            .addFields(
-                { name: '📅 Ngày hôm nay', value: todayStr, inline: true },
-                { name: '🕒 Lần check cuối', value: birthdayCache.lastCheck || 'Chưa có', inline: true },
-                { name: '👤 Đã gửi hôm nay', value: birthdayCache.sentToday.size.toString(), inline: true },
-                { name: '📊 Cache sentToday', value: Array.from(birthdayCache.sentToday).join('\n') || 'Không có', inline: false }
-            );
-        
-        await message.reply({ embeds: [embed] });
-    }
-
-    if (command === 'resetbirthdaycache') {
-        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-            const embed = createEmbed('error', '❌ Lỗi', 'Bạn cần quyền Administrator để sử dụng lệnh này.');
-            return message.reply({ embeds: [embed] });
-        }
-        
-        birthdayCache.sentToday.clear();
-        birthdayCache.lastCheck = null;
-        
-        const embed = createEmbed('success', '✅ Thành công', 'Đã reset cache sinh nhật!');
-        await message.reply({ embeds: [embed] });
-        Logger.info(`Đã reset cache sinh nhật bởi ${message.author.tag}`);
     }
 });
 
