@@ -1,0 +1,49 @@
+/* Inline styles moved to external CSS */
+
+.about-content {
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.about-text {
+    font-size: 1.3rem;
+    margin-bottom: 40px;
+    line-height: 1.8;
+}
+
+.feature-cards-container {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 25px;
+    margin-top: 50px;
+}
+
+.feature-card-small {
+    width: 220px;
+}
+
+.feature-icon-small {
+    font-size: 2.5rem;
+    color: var(--secondary);
+    margin-bottom: 20px;
+}
+
+.invite-text {
+    font-size: 1.3rem;
+    max-width: 600px;
+    margin: 0 auto 40px;
+    line-height: 1.7;
+}
+
+.invite-button {
+    font-size: 1.3rem;
+    padding: 18px 45px;
+}
+
+.invite-info {
+    margin-top: 30px;
+    color: var(--gray);
+    font-size: 1.1rem;
+}
