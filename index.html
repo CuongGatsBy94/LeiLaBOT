@@ -330,7 +330,7 @@
             <div style="text-align: center; max-width: 800px; margin: 0 auto;">
                 <p style="font-size: 1.2rem; margin-bottom: 30px;">
                     LeiLaBOT là một Discord bot đa chức năng được phát triển với mục đích mang lại trải nghiệm tốt nhất cho cộng đồng Discord. 
-                    Với giao diện thân thiện và dễ sử dụng, bot hỗ trợ nhiều tính năng hữu ích từ âm nhạc, quản lý đến tự động hóa.
+                    Với giao diện thân thiện và dễ sử dụng, bot hỗ trợ nhiều tính năng hữu ích từ âm nhạc, quản lý đến tự động hóa và giải trí.
                 </p>
                 <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; margin-top: 40px;">
                     <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; width: 200px;">
@@ -363,28 +363,35 @@
                         <i class="fas fa-music"></i>
                     </div>
                     <h3 class="feature-title">Hệ Thống Âm Nhạc</h3>
-                    <p>Phát nhạc từ YouTube với chất lượng cao, hỗ trợ queue, skip, pause và nhiều tính năng khác.</p>
+                    <p>Phát nhạc từ YouTube với chất lượng cao, hỗ trợ playlist, queue, skip, pause và nhiều tính năng khác.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <i class="fas fa-bell"></i>
+                        <i class="fas fa-birthday-cake"></i>
                     </div>
-                    <h3 class="feature-title">Tin Nhắn Định Kỳ</h3>
-                    <p>Tự động gửi tin nhắn theo giờ với nội dung đa dạng, giúp server luôn sôi động.</p>
+                    <h3 class="feature-title">Hệ Thống Sinh Nhật</h3>
+                    <p>Tự động thông báo sinh nhật thành viên với lời chúc đặc biệt và tính năng quản lý linh hoạt.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-user-plus"></i>
                     </div>
                     <h3 class="feature-title">Chào Mừng & Tạm Biệt</h3>
-                    <p>Tự động chào mừng thành viên mới và gửi lời tạm biệt khi ai đó rời server.</p>
+                    <p>Tự động chào mừng thành viên mới và gửi lời tạm biệt khi ai đó rời server với nhiều mẫu tin nhắn đa dạng.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <h3 class="feature-title">Tin Nhắn Tự Động</h3>
+                    <p>Tin nhắn tự động theo lịch trình với nội dung phù hợp theo thời gian trong ngày (sáng, trưa, chiều, tối, đêm).</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-cogs"></i>
                     </div>
                     <h3 class="feature-title">Quản Lý Server</h3>
-                    <p>Các công cụ quản lý server hiệu quả với hệ thống phân quyền linh hoạt.</p>
+                    <p>Các công cụ quản lý server hiệu quả với hệ thống phân quyền linh hoạt và cấu hình dễ dàng.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -392,13 +399,6 @@
                     </div>
                     <h3 class="feature-title">Hệ Thống DM</h3>
                     <p>Quản lý và phản hồi tin nhắn DM với tính năng log và auto-reply thông minh.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-chart-bar"></i>
-                    </div>
-                    <h3 class="feature-title">Thống Kê & Báo Cáo</h3>
-                    <p>Theo dõi hoạt động server với các báo cáo chi tiết và thống kê trực quan.</p>
                 </div>
             </div>
         </div>
@@ -413,12 +413,12 @@
                     <h3 class="category-title">🤖 BOT & HỆ THỐNG</h3>
                     <div class="command-list">
                         <div class="command-item">
-                            <div class="command-name">info</div>
-                            <div class="command-desc">Hiển thị thông tin về bot</div>
+                            <div class="command-name">ping</div>
+                            <div class="command-desc">Kiểm tra độ trễ và trạng thái bot</div>
                         </div>
                         <div class="command-item">
-                            <div class="command-name">botstatus</div>
-                            <div class="command-desc">Xem trạng thái và thống kê bot</div>
+                            <div class="command-name">help</div>
+                            <div class="command-desc">Hiển thị danh sách lệnh đầy đủ</div>
                         </div>
                         <div class="command-item">
                             <div class="command-name">prefix</div>
@@ -429,8 +429,12 @@
                             <div class="command-desc">Thay đổi prefix (admin)</div>
                         </div>
                         <div class="command-item">
-                            <div class="command-name">help</div>
-                            <div class="command-desc">Hiển thị danh sách lệnh</div>
+                            <div class="command-name">debugconfig</div>
+                            <div class="command-desc">Kiểm tra cấu hình bot</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">reloadconfig</div>
+                            <div class="command-desc">Tải lại cấu hình (admin)</div>
                         </div>
                     </div>
                 </div>
@@ -439,12 +443,12 @@
                     <h3 class="category-title">🔊 ÂM NHẠC</h3>
                     <div class="command-list">
                         <div class="command-item">
-                            <div class="command-name">play</div>
-                            <div class="command-desc">Phát nhạc từ YouTube</div>
+                            <div class="command-name">play/p</div>
+                            <div class="command-desc">Phát nhạc từ YouTube/URL</div>
                         </div>
                         <div class="command-item">
                             <div class="command-name">stop</div>
-                            <div class="command-desc">Dừng phát nhạc</div>
+                            <div class="command-desc">Dừng phát nhạc và xóa hàng chờ</div>
                         </div>
                         <div class="command-item">
                             <div class="command-name">pause</div>
@@ -459,8 +463,20 @@
                             <div class="command-desc">Bỏ qua bài hát hiện tại</div>
                         </div>
                         <div class="command-item">
-                            <div class="command-name">queue</div>
+                            <div class="command-name">queue/q</div>
                             <div class="command-desc">Xem danh sách chờ</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">volume/vol</div>
+                            <div class="command-desc">Điều chỉnh âm lượng</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">nowplaying/np</div>
+                            <div class="command-desc">Xem bài hát đang phát</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">loop</div>
+                            <div class="command-desc">Bật/tắt chế độ lặp</div>
                         </div>
                     </div>
                 </div>
@@ -472,19 +488,73 @@
                             <div class="command-name">setwelcome</div>
                             <div class="command-desc">Cấu hình hệ thống chào mừng</div>
                         </div>
+                        <div class="command-item">
+                            <div class="command-name">testwelcome</div>
+                            <div class="command-desc">Kiểm tra tin nhắn chào mừng</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">welcometemplates</div>
+                            <div class="command-desc">Xem mẫu tin nhắn chào mừng</div>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="command-category">
-                    <h3 class="category-title">⏰ TIN NHẮN ĐỊNH KỲ</h3>
+                    <h3 class="category-title">🎂 SINH NHẬT</h3>
                     <div class="command-list">
                         <div class="command-item">
-                            <div class="command-name">setschedule</div>
-                            <div class="command-desc">Cấu hình tin nhắn tự động</div>
+                            <div class="command-name">setbirthday</div>
+                            <div class="command-desc">Đặt ngày sinh nhật của bạn</div>
                         </div>
                         <div class="command-item">
-                            <div class="command-name">testschedule</div>
-                            <div class="command-desc">Kiểm tra tin nhắn định kỳ</div>
+                            <div class="command-name">setbirthdaychannel</div>
+                            <div class="command-desc">Đặt kênh thông báo sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">checkbirthday</div>
+                            <div class="command-desc">Kiểm tra sinh nhật hôm nay</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">listbirthdays</div>
+                            <div class="command-desc">Xem danh sách sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">findbirthday</div>
+                            <div class="command-desc">Tìm kiếm sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">debugbirthday</div>
+                            <div class="command-desc">Kiểm tra hệ thống sinh nhật</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">resetbirthdaycache</div>
+                            <div class="command-desc">Reset cache sinh nhật</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="command-category">
+                    <h3 class="category-title">⏰ TIN NHẮN TỰ ĐỘNG</h3>
+                    <div class="command-list">
+                        <div class="command-item">
+                            <div class="command-name">setschedulechannel</div>
+                            <div class="command-desc">Đặt kênh tin nhắn tự động</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">toggleschedule</div>
+                            <div class="command-desc">Bật/tắt tin nhắn tự động</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">scheduleinfo</div>
+                            <div class="command-desc">Thông tin tin nhắn tự động</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">testschedulenow</div>
+                            <div class="command-desc">Kiểm tra tin nhắn tự động</div>
+                        </div>
+                        <div class="command-item">
+                            <div class="command-name">debugschedule</div>
+                            <div class="command-desc">Kiểm tra hệ thống schedule</div>
                         </div>
                     </div>
                 </div>
