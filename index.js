@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-11-02 14:47:56
+ * @Last Modified time: 2025-11-02 18:05:51
  */
 
 require('dotenv').config();
@@ -709,25 +709,7 @@ async function playSong(guildId) {
         }
     }
 }
-// Trong lệnh play, thêm phần xử lý search tốt hơn
-const searchResults = await playdl.search(query, { 
-    limit: 5,
-    source: { youtube: "video" }
-});
 
-if (!searchResults || !searchResults.length) {
-    await processingMsg.delete().catch(() => {});
-    const embed = createEmbed('error', '❌ Lỗi', 
-        `Không tìm thấy bài hát cho: "${query}"\nVui lòng thử từ khóa khác!`);
-    return message.reply({ embeds: [embed] });
-}
-
-// Ưu tiên kết quả có thời lượng hợp lý (không quá dài)
-const validResult = searchResults.find(result => 
-    result.durationInSec && result.durationInSec < 3600 // Dưới 1 giờ
-) || searchResults[0];
-
-songInfo = await playdl.video_info(validResult.url);
 // ==================== XỬ LÝ SỰ KIỆN CHÍNH ====================
 
 client.on('ready', async () => {
@@ -1707,20 +1689,41 @@ client.on('messageCreate', async (message) => {
                     }
                 }
 
-                // XỬ LÝ VIDEO ĐƠN HOẶC TÌM KIẾM
+                // XỬ LÝ VIDEO ĐƠN HOẶC TÌM KIẾM - PHẦN ĐÃ SỬA
                 try {
                     if (isVideo) {
                         // Nếu là video URL
                         songInfo = await playdl.video_info(query);
                     } else {
-                        // Tìm kiếm trên YouTube
-                        const searchResults = await playdl.search(query, { limit: 1 });
-                        if (!searchResults.length) {
+                        // Tìm kiếm trên YouTube với xử lý lỗi tốt hơn
+                        Logger.debug(`Đang tìm kiếm: ${query}`);
+                        
+                        const searchResults = await playdl.search(query, { 
+                            limit: 5,
+                            source: { youtube: "video" }
+                        }).catch(searchError => {
+                            Logger.error('Lỗi tìm kiếm:', searchError);
+                            throw new Error('Không thể kết nối đến dịch vụ tìm kiếm');
+                        });
+
+                        if (!searchResults || !searchResults.length) {
                             await processingMsg.delete().catch(() => {});
-                            const embed = createEmbed('error', '❌ Lỗi', 'Không tìm thấy bài hát!');
+                            const embed = createEmbed('error', '❌ Lỗi', 
+                                `Không tìm thấy bài hát cho: "${query}"\nVui lòng thử từ khóa khác!`);
                             return message.reply({ embeds: [embed] });
                         }
-                        songInfo = await playdl.video_info(searchResults[0].url);
+
+                        // Ưu tiên kết quả có thời lượng hợp lý (không quá dài)
+                        const validResult = searchResults.find(result => 
+                            result.durationInSec && result.durationInSec < 3600 // Dưới 1 giờ
+                        ) || searchResults[0];
+
+                        Logger.debug(`Đã chọn kết quả: ${validResult.title}`, {
+                            duration: validResult.durationInSec,
+                            url: validResult.url
+                        });
+
+                        songInfo = await playdl.video_info(validResult.url);
                     }
 
                     const song = {
@@ -1755,7 +1758,17 @@ client.on('messageCreate', async (message) => {
                 } catch (videoError) {
                     Logger.error('Lỗi xử lý video:', videoError);
                     await processingMsg.delete().catch(() => {});
-                    const embed = createEmbed('error', '❌ Lỗi', 'Không thể phát bài hát này! Vui lòng thử URL hoặc tên bài hát khác.');
+                    
+                    let errorMessage = 'Không thể phát bài hát này! ';
+                    if (videoError.message.includes('Sign in to confirm')) {
+                        errorMessage += 'Video có thể bị giới hạn tuổi hoặc cần đăng nhập.';
+                    } else if (videoError.message.includes('Not found')) {
+                        errorMessage += 'Video không tồn tại hoặc không thể truy cập.';
+                    } else {
+                        errorMessage += 'Vui lòng thử URL hoặc tên bài hát khác.';
+                    }
+                    
+                    const embed = createEmbed('error', '❌ Lỗi', errorMessage);
                     await message.reply({ embeds: [embed] });
                 }
 
