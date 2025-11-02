@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-10-30 19:03:31
+ * @Last Modified time: 2025-11-02 12:44:07
  */
 
 require('dotenv').config();
@@ -503,7 +503,7 @@ function createScheduleEmbed(type, customDescription = null) {
     return embed;
 }
 
-// ==================== HỆ THỐNG ÂM NHẠC ====================
+// ==================== HỆ THỐNG ÂM NHẠC NÂNG CẤP ====================
 
 function getQueue(guildId) {
     if (!musicQueues.has(guildId)) {
@@ -520,6 +520,42 @@ function getQueue(guildId) {
         });
     }
     return musicQueues.get(guildId);
+}
+
+// Hàm đảm bảo kết nối voice
+async function ensureVoiceConnection(guildId, voiceChannel, textChannel) {
+    const queue = getQueue(guildId);
+    
+    if (!queue.connection) {
+        queue.connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: guildId,
+            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+        });
+
+        queue.player = createAudioPlayer();
+        queue.connection.subscribe(queue.player);
+
+        // Xử lý sự kiện kết nối
+        queue.connection.on(VoiceConnectionStatus.Ready, () => {
+            Logger.music(`Đã kết nối voice channel: ${voiceChannel.name}`);
+        });
+
+        queue.connection.on(VoiceConnectionStatus.Disconnected, async () => {
+            try {
+                await Promise.race([
+                    entersState(queue.connection, VoiceConnectionStatus.Signalling, 5_000),
+                    entersState(queue.connection, VoiceConnectionStatus.Connecting, 5_000),
+                ]);
+            } catch (error) {
+                queue.connection.destroy();
+                musicQueues.delete(guildId);
+                Logger.music(`Đã ngắt kết nối voice channel: ${voiceChannel.name}`);
+            }
+        });
+    }
+    
+    queue.textChannel = textChannel;
 }
 
 async function playSong(guildId) {
@@ -645,7 +681,7 @@ async function playSong(guildId) {
                 }
                 queue.currentIndex++;
                 setTimeout(() => playSong(guildId), 2000);
-                break;
+                return; // THÊM RETURN ĐỂ TRÁNH CHẠY TIẾP
             }
             
             await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1544,7 +1580,7 @@ client.on('messageCreate', async (message) => {
             Logger.info(`Admin ${message.author.tag} đã xóa ngày sinh của ${userId}`);
         }
 
-        // ==================== LỆNH ÂM NHẠC ====================
+        // ==================== LỆNH ÂM NHẠC NÂNG CẤP ====================
 
         if (command === 'play' || command === 'p') {
             if (!args.length) {
@@ -1565,80 +1601,129 @@ client.on('messageCreate', async (message) => {
                 const processingEmbed = createEmbed('info', '⏳ Đang xử lý...', 'Đang tìm kiếm bài hát...');
                 const processingMsg = await message.reply({ embeds: [processingEmbed] });
 
-                // Kiểm tra xem có phải URL không
-                if (playdl.yt_validate(query) === 'video') {
-                    songInfo = await playdl.video_info(query);
-                } else {
-                    // Tìm kiếm trên YouTube
-                    const searchResults = await playdl.search(query, { limit: 1 });
-                    if (!searchResults.length) {
+                // KIỂM TRA VÀ XỬ LÝ PLAYLIST
+                const isPlaylist = playdl.yt_validate(query) === 'playlist';
+                const isVideo = playdl.yt_validate(query) === 'video';
+                
+                if (isPlaylist) {
+                    // Xử lý playlist
+                    try {
+                        const playlist = await playdl.playlist_info(query, { incomplete: true });
+                        const videos = await playlist.all_videos();
+                        
+                        if (!videos.length) {
+                            await processingMsg.delete().catch(() => {});
+                            const embed = createEmbed('error', '❌ Lỗi', 'Playlist trống hoặc không thể truy cập!');
+                            return message.reply({ embeds: [embed] });
+                        }
+
+                        // Thêm tất cả video từ playlist vào hàng chờ
+                        const queue = getQueue(message.guild.id);
+                        let addedCount = 0;
+
+                        for (const video of videos.slice(0, 50)) { // Giới hạn 50 bài để tránh spam
+                            const song = {
+                                title: video.title,
+                                url: video.url,
+                                duration: video.durationRaw || 'Unknown',
+                                channel: video.channel?.name || 'Unknown',
+                                thumbnail: video.thumbnails[0]?.url,
+                                requester: message.author.toString()
+                            };
+                            queue.songs.push(song);
+                            addedCount++;
+                        }
+
+                        queue.textChannel = message.channel;
+
+                        // Xóa thông báo đang xử lý
                         await processingMsg.delete().catch(() => {});
-                        const embed = createEmbed('error', '❌ Lỗi', 'Không tìm thấy bài hát!');
+
+                        const embed = createEmbed('success', '🎵 Đã thêm playlist vào hàng chờ', 
+                            `Đã thêm **${addedCount}** bài hát từ playlist: **${playlist.title}**`)
+                            .addFields(
+                                { name: '📊 Tổng số bài', value: `${queue.songs.length} bài`, inline: true },
+                                { name: '👤 Thêm bởi', value: message.author.toString(), inline: true }
+                            );
+
+                        if (playlist.thumbnail) {
+                            embed.setThumbnail(playlist.thumbnail);
+                        }
+
+                        await message.reply({ embeds: [embed] });
+
+                        // Kết nối và phát nhạc
+                        await ensureVoiceConnection(message.guild.id, message.member.voice.channel, message.channel);
+                        
+                        if (!queue.isPlaying) {
+                            playSong(message.guild.id);
+                        }
+
+                        return;
+
+                    } catch (playlistError) {
+                        Logger.error('Lỗi xử lý playlist:', playlistError);
+                        await processingMsg.delete().catch(() => {});
+                        const embed = createEmbed('error', '❌ Lỗi', 'Không thể tải playlist! Vui lòng thử lại.');
                         return message.reply({ embeds: [embed] });
                     }
-                    songInfo = await playdl.video_info(searchResults[0].url);
                 }
 
-                const song = {
-                    title: songInfo.video_details.title,
-                    url: songInfo.video_details.url,
-                    duration: songInfo.video_details.durationRaw || 'Unknown',
-                    channel: songInfo.video_details.channel?.name || 'Unknown',
-                    thumbnail: songInfo.video_details.thumbnails[0]?.url,
-                    requester: message.author.toString()
-                };
-
-                const queue = getQueue(message.guild.id);
-                queue.songs.push(song);
-                queue.textChannel = message.channel;
-
-                // Xóa thông báo đang xử lý
-                await processingMsg.delete().catch(() => {});
-
-                const embed = createMusicEmbed('success', '✅ Đã thêm vào hàng chờ', song, [
-                    { name: '📊 Vị trí', value: `#${queue.songs.length}`, inline: true }
-                ]);
-
-                await message.reply({ embeds: [embed] });
-
-                // Kết nối voice channel nếu chưa có
-                if (!queue.connection) {
-                    const voiceChannel = message.member.voice.channel;
-                    queue.connection = joinVoiceChannel({
-                        channelId: voiceChannel.id,
-                        guildId: message.guild.id,
-                        adapterCreator: message.guild.voiceAdapterCreator,
-                    });
-
-                    queue.player = createAudioPlayer();
-                    queue.connection.subscribe(queue.player);
-
-                    // Xử lý sự kiện kết nối
-                    queue.connection.on(VoiceConnectionStatus.Ready, () => {
-                        Logger.music(`Đã kết nối voice channel: ${voiceChannel.name}`);
-                    });
-
-                    queue.connection.on(VoiceConnectionStatus.Disconnected, async () => {
-                        try {
-                            await Promise.race([
-                                entersState(queue.connection, VoiceConnectionStatus.Signalling, 5_000),
-                                entersState(queue.connection, VoiceConnectionStatus.Connecting, 5_000),
-                            ]);
-                        } catch (error) {
-                            queue.connection.destroy();
-                            musicQueues.delete(message.guild.id);
+                // XỬ LÝ VIDEO ĐƠN HOẶC TÌM KIẾM
+                try {
+                    if (isVideo) {
+                        // Nếu là video URL
+                        songInfo = await playdl.video_info(query);
+                    } else {
+                        // Tìm kiếm trên YouTube
+                        const searchResults = await playdl.search(query, { limit: 1 });
+                        if (!searchResults.length) {
+                            await processingMsg.delete().catch(() => {});
+                            const embed = createEmbed('error', '❌ Lỗi', 'Không tìm thấy bài hát!');
+                            return message.reply({ embeds: [embed] });
                         }
-                    });
-                }
+                        songInfo = await playdl.video_info(searchResults[0].url);
+                    }
 
-                // Bắt đầu phát nếu chưa phát
-                if (!queue.isPlaying) {
-                    playSong(message.guild.id);
+                    const song = {
+                        title: songInfo.video_details.title,
+                        url: songInfo.video_details.url,
+                        duration: songInfo.video_details.durationRaw || 'Unknown',
+                        channel: songInfo.video_details.channel?.name || 'Unknown',
+                        thumbnail: songInfo.video_details.thumbnails[0]?.url,
+                        requester: message.author.toString()
+                    };
+
+                    const queue = getQueue(message.guild.id);
+                    queue.songs.push(song);
+                    queue.textChannel = message.channel;
+
+                    // Xóa thông báo đang xử lý
+                    await processingMsg.delete().catch(() => {});
+
+                    const embed = createMusicEmbed('success', '✅ Đã thêm vào hàng chờ', song, [
+                        { name: '📊 Vị trí', value: `#${queue.songs.length}`, inline: true }
+                    ]);
+
+                    await message.reply({ embeds: [embed] });
+
+                    // Kết nối và phát nhạc
+                    await ensureVoiceConnection(message.guild.id, message.member.voice.channel, message.channel);
+                    
+                    if (!queue.isPlaying) {
+                        playSong(message.guild.id);
+                    }
+
+                } catch (videoError) {
+                    Logger.error('Lỗi xử lý video:', videoError);
+                    await processingMsg.delete().catch(() => {});
+                    const embed = createEmbed('error', '❌ Lỗi', 'Không thể phát bài hát này! Vui lòng thử URL hoặc tên bài hát khác.');
+                    await message.reply({ embeds: [embed] });
                 }
 
             } catch (error) {
                 Logger.error('Lỗi phát nhạc:', error);
-                const embed = createEmbed('error', '❌ Lỗi', 'Không thể phát bài hát này!');
+                const embed = createEmbed('error', '❌ Lỗi', 'Đã xảy ra lỗi khi xử lý yêu cầu! Vui lòng thử lại.');
                 await message.reply({ embeds: [embed] });
             }
         }
