@@ -2,7 +2,7 @@
  * @Author: CuongGatsBy94
  * @Date: 2025-10-05 04:12:42
  * @Last Modified by:   Your name
- * @Last Modified time: 2025-11-02 12:44:07
+ * @Last Modified time: 2025-11-02 14:47:56
  */
 
 require('dotenv').config();
@@ -565,25 +565,23 @@ async function playSong(guildId) {
         if (queue.loop && queue.songs.length > 0) {
             queue.currentIndex = 0;
         } else {
+            // End of queue
             if (queue.connection) {
                 if (queue.textChannel) {
                     const embed = createEmbed('success', '🎵 Kết thúc hàng chờ', 
                         'Tất cả bài hát trong hàng chờ đã được phát xong!');
-                    queue.textChannel.send({ embeds: [embed] }).catch(error => {
-                        Logger.error('Lỗi gửi tin nhắn kết thúc hàng chờ:', error);
-                    });
+                    queue.textChannel.send({ embeds: [embed] }).catch(console.error);
                 }
                 queue.connection.destroy();
             }
             musicQueues.delete(guildId);
-            Logger.music(`Đã xóa hàng chờ nhạc cho guild: ${guildId}`);
             return;
         }
     }
 
     const song = queue.songs[queue.currentIndex];
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 2;
 
     while (retryCount < maxRetries) {
         try {
@@ -591,29 +589,40 @@ async function playSong(guildId) {
             queue.isPaused = false;
 
             let stream;
+            
+            // THỬ play-dl TRƯỚC
             try {
+                Logger.debug(`Thử play-dl cho: ${song.title}`, { url: song.url });
                 stream = await playdl.stream(song.url, { 
                     quality: 2,
                     discordPlayerCompatibility: true
                 });
+                Logger.success(`play-dl thành công cho: ${song.title}`);
             } catch (playDlError) {
-                Logger.error('Lỗi play-dl:', playDlError?.message || playDlError);
-
+                Logger.warn(`play-dl thất bại, thử ytdl-core: ${playDlError.message}`);
+                
+                // FALLBACK: sử dụng ytdl-core
                 try {
-                    Logger.debug('Fallback sang ytdl-core để phát:', song.url);
                     const ytStream = ytdl(song.url, {
                         filter: 'audioonly',
-                        quality: 'highestaudio',
-                        highWaterMark: 1 << 25
+                        quality: 'lowestaudio',
+                        highWaterMark: 1 << 25,
+                        dlChunkSize: 0
                     });
+                    
                     stream = {
                         stream: ytStream,
-                        type: 'unknown'
+                        type: 'opus'
                     };
-                } catch (ytdlErr) {
-                    Logger.error('Lỗi ytdl-core fallback:', ytdlErr?.message || ytdlErr);
-                    throw playDlError;
+                    Logger.success(`ytdl-core fallback thành công cho: ${song.title}`);
+                } catch (ytdlError) {
+                    Logger.error(`Cả hai phương thức đều thất bại:`, ytdlError);
+                    throw new Error(`Không thể tạo stream: ${ytdlError.message}`);
                 }
+            }
+
+            if (!stream) {
+                throw new Error('Không thể tạo audio stream');
             }
 
             const resource = createAudioResource(stream.stream, {
@@ -621,75 +630,104 @@ async function playSong(guildId) {
                 inlineVolume: true
             });
 
-            if (resource && queue.player) {
-                if (resource.volume) {
-                    resource.volume.setVolume(queue.volume);
-                }
-
-                queue.player.play(resource);
-                
-                // Embed thông báo bài hát mới
-                if (queue.textChannel) {
-                    const progressBar = createProgressBar(queue.currentIndex + 1, queue.songs.length);
-                    const embed = createMusicEmbed('music', '🎶 Đang phát nhạc', song, [
-                        { name: '📊 Vị trí', value: `${queue.currentIndex + 1}/${queue.songs.length}`, inline: true },
-                        { name: '🔊 Âm lượng', value: `${Math.round(queue.volume * 100)}%`, inline: true },
-                        { name: '📈 Tiến độ', value: progressBar, inline: false }
-                    ]);
-                    
-                    queue.textChannel.send({ embeds: [embed] }).catch(error => {
-                        Logger.error('Lỗi gửi embed bài hát:', error);
-                    });
-                }
-
-                Logger.music(`Đang phát: ${song.title}`, {
-                    guild: guildId,
-                    position: queue.currentIndex + 1,
-                    total: queue.songs.length
-                });
-
-                queue.player.once(AudioPlayerStatus.Idle, () => {
-                    setTimeout(() => {
-                        if (!queue.loop) {
-                            queue.currentIndex++;
-                        }
-                        playSong(guildId);
-                    }, 1000);
-                });
-
-                queue.player.once('error', (error) => {
-                    Logger.error('Lỗi player:', error);
-                    if (queue.textChannel) {
-                        const embed = createEmbed('error', '❌ Lỗi phát nhạc', 
-                            'Có lỗi xảy ra khi phát nhạc! Đang thử lại...');
-                        queue.textChannel.send({ embeds: [embed] }).catch(console.error);
-                    }
-                    setTimeout(() => playSong(guildId), 5000);
-                });
-
-                break;
+            if (!resource) {
+                throw new Error('Không thể tạo audio resource');
             }
+
+            if (resource.volume) {
+                resource.volume.setVolume(queue.volume);
+            }
+
+            // Xóa listener cũ trước khi thêm mới
+            queue.player.removeAllListeners();
+
+            queue.player.play(resource);
+            
+            // Thông báo bài hát đang phát
+            if (queue.textChannel) {
+                const progressBar = createProgressBar(queue.currentIndex + 1, queue.songs.length);
+                const embed = createMusicEmbed('music', '🎶 Đang phát nhạc', song, [
+                    { name: '📊 Vị trí', value: `${queue.currentIndex + 1}/${queue.songs.length}`, inline: true },
+                    { name: '🔊 Âm lượng', value: `${Math.round(queue.volume * 100)}%`, inline: true },
+                    { name: '📈 Tiến độ', value: progressBar, inline: false }
+                ]);
+                
+                queue.textChannel.send({ embeds: [embed] }).catch(error => {
+                    Logger.error('Lỗi gửi embed bài hát:', error);
+                });
+            }
+
+            Logger.music(`Đang phát: ${song.title}`, {
+                guild: guildId,
+                position: queue.currentIndex + 1,
+                total: queue.songs.length
+            });
+
+            // Xử lý khi bài hát kết thúc
+            queue.player.once(AudioPlayerStatus.Idle, () => {
+                Logger.debug(`Bài hát kết thúc: ${song.title}`);
+                setTimeout(() => {
+                    if (!queue.loop) {
+                        queue.currentIndex++;
+                    }
+                    playSong(guildId);
+                }, 1000);
+            });
+
+            // Xử lý lỗi player
+            queue.player.once('error', (error) => {
+                Logger.error('Lỗi AudioPlayer:', error);
+                if (queue.textChannel && retryCount === maxRetries - 1) {
+                    const embed = createEmbed('error', '❌ Lỗi phát nhạc', 
+                        `Không thể phát: **${song.title}**\nĐang chuyển sang bài tiếp theo...`);
+                    queue.textChannel.send({ embeds: [embed] }).catch(console.error);
+                }
+                // Thử lại bài hát này
+                setTimeout(() => playSong(guildId), 2000);
+            });
+
+            break; // Thoát vòng lặp retry nếu thành công
+
         } catch (error) {
-            Logger.error(`Lỗi phát nhạc (Lần thử ${retryCount + 1}/${maxRetries}):`, error);
             retryCount++;
+            Logger.error(`Lỗi phát nhạc (Lần thử ${retryCount}/${maxRetries}):`, error);
             
             if (retryCount >= maxRetries) {
+                // Đã thử đủ số lần, chuyển sang bài tiếp theo
                 if (queue.textChannel) {
                     const embed = createEmbed('error', '❌ Lỗi nghiêm trọng', 
-                        `Không thể phát bài hát: ${song.title}. Đang chuyển sang bài tiếp theo...`);
+                        `Không thể phát: **${song.title}**\nĐang chuyển sang bài tiếp theo...`);
                     queue.textChannel.send({ embeds: [embed] }).catch(console.error);
                 }
                 queue.currentIndex++;
                 setTimeout(() => playSong(guildId), 2000);
-                return; // THÊM RETURN ĐỂ TRÁNH CHẠY TIẾP
+                return;
             }
             
+            // Chờ 2 giây trước khi thử lại
             await new Promise(resolve => setTimeout(resolve, 2000));
-            continue;
         }
     }
 }
+// Trong lệnh play, thêm phần xử lý search tốt hơn
+const searchResults = await playdl.search(query, { 
+    limit: 5,
+    source: { youtube: "video" }
+});
 
+if (!searchResults || !searchResults.length) {
+    await processingMsg.delete().catch(() => {});
+    const embed = createEmbed('error', '❌ Lỗi', 
+        `Không tìm thấy bài hát cho: "${query}"\nVui lòng thử từ khóa khác!`);
+    return message.reply({ embeds: [embed] });
+}
+
+// Ưu tiên kết quả có thời lượng hợp lý (không quá dài)
+const validResult = searchResults.find(result => 
+    result.durationInSec && result.durationInSec < 3600 // Dưới 1 giờ
+) || searchResults[0];
+
+songInfo = await playdl.video_info(validResult.url);
 // ==================== XỬ LÝ SỰ KIỆN CHÍNH ====================
 
 client.on('ready', async () => {
